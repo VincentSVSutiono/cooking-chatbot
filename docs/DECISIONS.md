@@ -1,6 +1,6 @@
 # DECISIONS.md
 
-*Reference doc: the technical facts and constraints behind our choices. Read it before touching data sources, models or providers, the database, deployment, or free-tier limits. It is not loaded every session.*
+_Reference doc: the technical facts and constraints behind our choices. Read it before touching data sources, models or providers, the database, deployment, or free-tier limits. It is not loaded every session._
 
 **Status tags:** **[verified]** was checked against an official page, **[unverified]** was not. "Checked Oct 2026" means during planning. Free tiers change often, so re-check a number before relying on it, and update it here in place when it's wrong. New decisions go in the Decision log at the bottom.
 
@@ -35,6 +35,7 @@
 - **Embedding model:** a separate model, decided in step 5b. Zen lists none, so it will come from another provider. Free options **[unverified]**. Changing it later means re-embedding every recipe, because vectors from different models can't be compared.
 
 ### Swap checklist (use for any provider)
+
 1. Does it support **tool calling**, and is it reliable at it? Free models are often flaky, so test it.
 2. Does it support **structured output**?
 3. **Rate limits:** requests per minute and per day, tokens per minute.
@@ -43,13 +44,15 @@
 6. Is the **context window** enough for recipe context plus chat history?
 
 ### Snapshot: OpenCode Zen (checked Oct 2026, expect drift)
+
 - Endpoint `https://opencode.ai/zen/v1`, model list at `/models`, works with the AI SDK. **[verified]**
-- Free models are marked limited-time and rotate. Muse Spark 1.3 Contributor Free is free in exchange for letting Meta train on prompts and completions. **[verified]**
+- Free models are marked limited-time and rotate. Muse Spark 1.3 Contributor Free is free in exchange for letting Meta train on prompts and completions. **[unverified if still free]**
 - Muse Spark uses the `/responses` endpoint (`@ai-sdk/openai`). Most other free models use `/chat/completions` (`@ai-sdk/openai-compatible`). Crossing that line means a few lines changed in the config file. **[verified]**
 - Setup asks for billing details, and auto-reload tops up $20 when the balance drops below $5. **Turn auto-reload off and set a monthly limit.** **[verified]**
 - Free-model rate limits aren't stated in the docs. Zen is framed as a gateway for coding agents, so app use is **[unverified]**. A GitHub issue reported HTTP 500 errors via API key for Muse Spark 1.2 free, so test 1.3 early.
 
 ### Snapshot: fallback providers (limits change often)
+
 - **Gemini (AI Studio):** free tier exists, Pro models are no longer free per several blogs, free-tier data may be used for training, and exact limits differ across sources. Check AI Studio. **[unverified numbers]**
 - **Groq:** its docs list gpt-oss-120b at 30 requests/min, 1K/day, but only 8K tokens/min. The page doesn't make clear which plan those figures belong to. The token cap matters for RAG. **[partly verified]**
 - **OpenRouter:** `:free` models allow 20 requests/min, and 50/day unless 10 or more credits were bought, then 1,000/day. **[verified]**
@@ -97,21 +100,22 @@
 
 ## 6. Open items
 
-- [ ] Email TheMealDB about a personal-only deployment *(user, before step 7)*
-- [ ] TheMealDB free-key real limits and recipe count *(step 2)*
-- [ ] Pick the chat model and test tool calling on it *(step 1 and 2)*
-- [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed *(step 1)*
-- [ ] Pick the embedding model *(step 5b)*
-- [ ] Safety table values: take from an official food-safety source and cite it here *(step 6)*
-- [ ] Link import: site terms *(step 4)*
-- [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication *(step 7)*
-- [ ] Confirm the skills CLI installs into `.agents/skills/` (shared by OpenCode and AGY) *(setup)*
+- [ ] Email TheMealDB about a personal-only deployment _(user, before step 7)_
+- [ ] TheMealDB free-key real limits and recipe count _(step 2)_
+- [ ] Pick the chat model and test tool calling on it _(step 1 and 2)_
+- [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed _(step 1)_
+- [ ] Pick the embedding model _(step 5b)_
+- [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
+- [ ] Link import: site terms _(step 4)_
+- [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication _(step 7)_
+- [ ] Confirm the skills CLI installs into `.agents/skills/` (shared by OpenCode and AGY) _(setup)_
 - [x] Versions checked: OpenCode 2.0.32, AGY 1.3.6, Node v22.23.1, git 2.56.0
-- [ ] Confirm the permission prompts behave as intended (edits and shell ask) *(first session)*
-- [ ] Confirm `context7` connects in `opencode mcp list` *(setup)*
+- [ ] Confirm the permission prompts behave as intended (edits and shell ask) _(first session)_
+- [ ] Confirm `context7` connects in `opencode mcp list` _(setup)_
 
 ## 7. Decision log
 
-*(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)*
+_(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
 
 - 2026-10-19: Learning mode split by novelty, not one default. The user writes what is new to them (LLM, RAG, Next.js-specific) and the agent writes what they already know (React UI, styling, basics), with active review of anything the agent writes. Reason: the user already knows React, Express and TypeScript and wants to learn the LLM and Next.js parts. Source: Anthropic's skill-formation study (arXiv 2601.20245) found question-driven AI use preserved comprehension better than delegation. AGENTS.md rule 2 updated.
+- 2026-10-19: Added docs/DESIGN.md (warm cream and butter-yellow light theme, dark brown text, one accent plus a warning color). Reason: avoid generic AI look. Colors not yet contrast-checked.

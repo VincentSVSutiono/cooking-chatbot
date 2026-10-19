@@ -14,6 +14,7 @@ Project: Beginner Cooking Companion, a cooking-only AI chatbot. **The primary go
 
 - `docs/PRD.md`: what to build, the current step, progress.
 - `docs/DECISIONS.md`: read before touching data sources, models or providers, the database, deployment, or free-tier limits.
+- `docs/DESIGN.md`: colors, type and icons. Read before building or changing UI.
 
 ## Learning mode (highest priority)
 
@@ -46,8 +47,9 @@ Next.js (App Router), TypeScript, Tailwind, Vercel AI SDK, Supabase (Postgres + 
 
 ## Commands
 
-Placeholders. Replace with the real scripts after the project is scaffolded, and use npm scripts, not OS-specific commands:
-`npm run dev`, `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`
+Use npm scripts, not OS-specific commands:
+`npm run dev`, `npm run build`, `npm run lint`, `npm run typecheck`
+`npm test` doesn't exist yet. It's added in Step 3 with the first tests.
 
 ## Conventions
 
@@ -63,7 +65,7 @@ Placeholders. Replace with the real scripts after the project is scaffolded, and
 
 - Any AI SDK code (chat, tools, structured output, embeddings): `ai-sdk`
 - Starting any PRD step or feature: `grill-me`
-- Building or changing UI (chat, recipe card, cook-along): `frontend-ui-engineering`
+- Building or changing UI (chat, recipe card, cook-along): `frontend-ui-engineering`, after reading `docs/DESIGN.md`
 - Designing tool inputs and outputs, schemas, route handlers, module boundaries: `api-and-interface-design`
 - Writing tests, or logic that should have them (recipe validation, safety table): `test-driven-development`. In learning mode, you write the tests and the user writes the code that makes them pass.
 - Anything broken, failing or unexpected: `debugging-and-error-recovery`
