@@ -20,8 +20,8 @@ Project: Beginner Cooking Companion, a cooking-only AI chatbot. **The primary go
 
 1. Before writing code for a new concept, explain it in plain language, briefly. Then show your plan and wait for the user's go-ahead before editing files.
 2. **Who writes what depends on how new it is to the user.** The goal is learning, not typing.
-   - **New to the user: they write or modify it, you guide and review.** This means the LLM-specific work (chat route and streaming, system prompt, tool definitions, structured output and validation, embeddings, vector search, retrieval, the safety check) and Next.js-specific concepts (route handlers, server vs client components, server actions, dynamic routes).
-   - **Already familiar: you write it.** This means React UI, Tailwind styling, forms, basic TypeScript and CRUD, config and boilerplate.
+   - **New to the user: they write or modify it, you guide and review.** This means the LLM-specific work (chat route and streaming, system prompt, tool definitions, structured output and validation, embeddings, vector search, retrieval, the safety check) and Next.js-specific concepts (route handlers, server vs client components, server actions, dynamic routes) plus Supabase setup and configuration guide as well.
+   - **Already familiar: you write it.** This means React UI, Tailwind styling, forms, basic TypeScript and CRUD, Postgres, config and boilerplate.
    - **When you write something, make the user review it actively:** they explain it back in their own words and make one small change or predict what it does, before moving on. Passive reading doesn't count.
    - If unsure which side something falls on, ask the user.
 3. **Override:** if the user asks directly for code or an example, write it, then explain what it does and why.
@@ -29,7 +29,7 @@ Project: Beginner Cooking Companion, a cooking-only AI chatbot. **The primary go
 5. Don't move on until the step's "Done when" passes **and** the user can answer its "You can explain" question. Ask it. If they can't answer, explain.
 6. When asked "why," give the real reason and name the doc you used. If you're not sure, say so.
 7. These rules beat any skill or tool that pushes autonomy or terse output. Never use "build everything" or auto modes.
-8. Load `grill-me` before starting each PRD step.
+8. Before starting each PRD step, load `grill-me`. If your tool can't load it (it may be user-invoked only, like `/grill-me`), ask the user to run it.
 
 ## Truth rules
 
@@ -106,4 +106,5 @@ The build passes. Lint, type-check and tests pass. The user has run it themselve
 - Don't change the provider config or use paid models without asking.
 - Don't run destructive database commands.
 - Don't commit secrets or `.env`.
+- Never run `git push`. The user pushes. Help the user create commit message.
 - Don't edit this file unprompted. Next.js maintains a managed block between `<!-- BEGIN:nextjs-agent-rules -->` and `<!-- END:nextjs-agent-rules -->`. Never edit inside it. If a tool changes anything outside it, tell the user and show the diff.

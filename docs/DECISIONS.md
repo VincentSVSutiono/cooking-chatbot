@@ -46,7 +46,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 ### Snapshot: OpenCode Zen (checked Oct 2026, expect drift)
 
 - Endpoint `https://opencode.ai/zen/v1`, model list at `/models`, works with the AI SDK. **[verified]**
-- Free models are marked limited-time and rotate. Muse Spark 1.3 Contributor Free is free in exchange for letting Meta train on prompts and completions. **[unverified if still free]**
+- Free models are marked limited-time and rotate. Muse Spark 1.3 Contributor Free is listed as free at opencode.ai/docs/zen (checked 2026-10-20) in exchange for letting Meta train on prompts and completions. Endpoint URL differs between sources (`/zen/v1/responses` in the docs vs `/inference/v1/responses` on one aggregator), and API behavior, rate limits and tool calling are untested **[unverified]**. Other free models listed: Big Pickle, MiMo-V2.5 Free, Ling 3.0 Flash Fin Free, Nemotron 3 Ultra Free, Nemotron 3.5 Lightning Free, Jev 1.13 Free.
 - Muse Spark uses the `/responses` endpoint (`@ai-sdk/openai`). Most other free models use `/chat/completions` (`@ai-sdk/openai-compatible`). Crossing that line means a few lines changed in the config file. **[verified]**
 - Setup asks for billing details, and auto-reload tops up $20 when the balance drops below $5. **Turn auto-reload off and set a monthly limit.** **[verified]**
 - Free-model rate limits aren't stated in the docs. Zen is framed as a gateway for coding agents, so app use is **[unverified]**. A GitHub issue reported HTTP 500 errors via API key for Muse Spark 1.2 free, so test 1.3 early.
@@ -70,6 +70,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - **Environment:** Fedora 44 (GNOME), Zed editor, OpenCode CLI 2.0.32, and AGY CLI 1.3.6 (Google's Antigravity CLI, command `agy`, the successor to the Gemini CLI). Node v22.23.1 and git 2.56.0. **[checked on the user's machine]**
 - **Zed and OpenCode:** connect through ACP. Run `opencode auth login` in a terminal first, then add an `agent_servers` entry in `~/.config/zed/settings.json` with `command` `opencode` and `args` `["acp"]`. If Zed can't find `opencode`, use the absolute path from `which opencode`. ACP uses the project's own config, skills, instructions and MCP servers, and permission requests show a diff. **[verified in the v2 docs]** Whether Zed can host AGY is **[unchecked]**. Use AGY in the terminal.
 - **Two agents, one setup:** both read `AGENTS.md`, so it's shared. Both read `.agents/skills/`, so install skills there and both see them. **[verified]** MCP is configured separately per tool: OpenCode in `opencode.json`, AGY with `agy mcp add|list` or `.agents/mcp_config.json`. Sources disagree on AGY's global config path, so use the commands. Only one agent edits at a time, and commit between them.
+- **AGY notes:** permissions use `allow`, `ask` and `deny` lists with entries like `command(git status)`, and precedence is deny > ask > allow (the opposite of OpenCode, where the last match wins). `opencode.json` does not apply to AGY, so AGY has no `git push` deny rule and relies on its `request-review` mode: always choose "allow once". Add MCP servers with `agy mcp add [flags] <name> <url-or-command>`, with flags first and `--` before a command that starts with `-`. AGY's MCP config file path is **[unverified]**, sources conflict. `grill-me` has `disable-model-invocation: true`, so in AGY the user types `/grill-me`. Whether OpenCode honors that field is **[unverified]**.
 - **MCP (fewer is better, each adds tokens every turn):**
   - Next.js DevTools MCP, `npx -y next-devtools-mcp@latest`. Runtime features need Next.js 16+.
   - Context7, remote at `https://mcp.context7.com/mcp`, for libraries that don't bundle docs.
@@ -81,7 +82,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
   - **Instructions:** `instructions` still works (files, globs, URLs). V2 reads `AGENTS.md` only, with no `CLAUDE.md` fallback, and picks up `AGENTS.md` edits mid-session.
   - **Skills:** `.agents/skills` is still discovered. The skill ID is the directory name, and skills without a `description` aren't advertised. The agent loads a skill with the `skill` tool, and you can load one yourself by writing `@skill-id` in a prompt.
   - **No language servers:** V2 doesn't run LSP, so rely on the lint, type-check and build commands.
-- **Skills used:** `ai-sdk`, `grill-me`, `frontend-ui-engineering`, `api-and-interface-design`, `test-driven-development`, `debugging-and-error-recovery`, `code-review-and-quality`, `security-and-hardening`, `supabase`, TheMealDB's `SKILL.md`, optional `ci-cd-and-automation`, and `ponytail` only on request. Each is installed when its step starts (see the PRD).
+- **Skills used:** `ai-sdk`, `grill-me`, `frontend-ui-engineering`, `api-and-interface-design`, `test-driven-development`, `debugging-and-error-recovery`, `code-review-and-quality`, `security-and-hardening`, `supabase`, TheMealDB's `SKILL.md`, optional `ci-cd-and-automation`, and `ponytail` only on request. Each is installed when its step starts (see the PRD). Installed 2026-10-20 in `.agents/skills/` (verified: both CLIs list all five): `grill-me` (mattpocock/skills), `ai-sdk` (vercel/ai), and `frontend-ui-engineering`, `debugging-and-error-recovery`, `code-review-and-quality` (addyosmani/agent-skills). Skills and agent folders are gitignored.
 - **Skills skipped, and why:**
   - **Superpowers:** built for the agent to work autonomously with mandatory, auto-triggering workflows, which fights the learning rules.
   - **`using-agent-skills`:** a router for the full pack. AGENTS.md already maps work to our skills.
@@ -108,14 +109,18 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
 - [ ] Link import: site terms _(step 4)_
 - [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication _(step 7)_
-- [ ] Confirm the skills CLI installs into `.agents/skills/` (shared by OpenCode and AGY) _(setup)_
+- [x] Skills install into `.agents/skills/` and both CLIs list them
 - [x] Versions checked: OpenCode 2.0.32, AGY 1.3.6, Node v22.23.1, git 2.56.0
 - [ ] Confirm the permission prompts behave as intended (edits and shell ask) _(first session)_
-- [ ] Confirm `context7` connects in `opencode mcp list` _(setup)_
+- [x] `context7` connects in OpenCode, and both CLIs returned a Context7 result in the setup check
+- [ ] Confirm `next-devtools` is disabled in `agy mcp list` _(setup)_
+- [ ] Check which AI SDK version npm installs (Context7 lists up to v7.0.0) and that the `ai-sdk` skill matches it _(step 1)_
+- [ ] Test whether `browser_eval` in `next-devtools-mcp` covers browser automation. If not, add a Playwright MCP to both CLIs and log it _(step 1)_
 
 ## 7. Decision log
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
 
+- 2026-10-20: Added `docs/DESIGN.md` (warm cream and butter-yellow light theme, dark brown text, one accent plus a warning color, contrast checked by the user). Reason: avoid a generic AI look. AGENTS.md now says to read it before UI work.
+- 2026-10-20: Browser automation deferred. Enable `next-devtools` at step 1 and test `browser_eval` before adding a separate Playwright MCP. Reason: fewer MCPs means fewer tokens per turn.
 - 2026-10-19: Learning mode split by novelty, not one default. The user writes what is new to them (LLM, RAG, Next.js-specific) and the agent writes what they already know (React UI, styling, basics), with active review of anything the agent writes. Reason: the user already knows React, Express and TypeScript and wants to learn the LLM and Next.js parts. Source: Anthropic's skill-formation study (arXiv 2601.20245) found question-driven AI use preserved comprehension better than delegation. AGENTS.md rule 2 updated.
-- 2026-10-19: Added docs/DESIGN.md (warm cream and butter-yellow light theme, dark brown text, one accent plus a warning color). Reason: avoid generic AI look. Colors not yet contrast-checked.
