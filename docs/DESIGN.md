@@ -26,7 +26,7 @@ Contrast values are my estimates. **Unverified:** run each text/background pair 
 
 - Body: a clean sans-serif, 16px minimum, line height about 1.6.
 - Headings and recipe titles: a warm serif for personality.
-- Font candidates: Fraunces (headings), Inter (body). Not decided.
+- Fonts: Fraunces (headings, `--font-serif`), Inter (body, `--font-sans`).
 - Keep line length comfortable: replies at most about 70 characters wide.
 
 ## Icons
