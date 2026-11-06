@@ -30,8 +30,8 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 
 ## 3. LLM provider
 
-- **Design:** provider and model live in **one config file** (created in step 1). Nothing provider-specific anywhere else, so swapping is a config change.
-- **Chat model:** decided in step 1. Current candidate: OpenCode Zen free models, but any provider can replace it.
+- **Design:** shared model IDs live in `config/models.ts` (client-safe) and provider instantiation lives in `config/ai.ts` (`server-only`). Nothing provider-specific anywhere else, so swapping is a config change.
+- **Chat model:** Google Gemini (`@ai-sdk/google` via Google AI Studio free tier), selectable in UI between `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite` (default), and `gemini-3.1-flash-lite`. **[verified, step 1]**
 - **Embedding model:** a separate model, decided in step 5b. Zen lists none, so it will come from another provider. Free options **[unverified]**. Changing it later means re-embedding every recipe, because vectors from different models can't be compared.
 
 ### Swap checklist (use for any provider)
@@ -103,7 +103,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 
 - [ ] Email TheMealDB about a personal-only deployment _(user, before step 7)_
 - [ ] TheMealDB free-key real limits and recipe count _(step 2)_
-- [ ] Pick the chat model and test tool calling on it _(step 1 and 2)_
+- [ ] Test tool calling and search grounding compatibility on the chosen Gemini models _(step 2 and 4)_
 - [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed _(step 1)_
 - [ ] Pick the embedding model _(step 5b)_
 - [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
@@ -111,16 +111,18 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication _(step 7)_
 - [x] Skills install into `.agents/skills/` and both CLIs list them
 - [x] Versions checked: OpenCode 2.0.32, AGY 1.3.6, Node v22.23.1, git 2.56.0
-- [ ] Confirm the permission prompts behave as intended (edits and shell ask) _(first session)_
+- [x] Confirm the permission prompts behave as intended (edits and shell ask) _(first session)_
 - [x] `context7` connects in OpenCode, and both CLIs returned a Context7 result in the setup check
 - [ ] Confirm `next-devtools` is disabled in `agy mcp list` _(setup)_
-- [ ] Check which AI SDK version npm installs (Context7 lists up to v7.0.0) and that the `ai-sdk` skill matches it _(step 1)_
-- [ ] Test whether `browser_eval` in `next-devtools-mcp` covers browser automation. If not, add a Playwright MCP to both CLIs and log it _(step 1)_
+- [x] Check which AI SDK version npm installs (`ai@^7.0.157`, `@ai-sdk/react@^4.0.161`, `@ai-sdk/google@^4.0.108`) and verified bundled docs in `node_modules/ai/docs/` _(step 1)_
+- [x] Test whether `browser_eval` in `next-devtools-mcp` covers browser automation _(tested in step 1; user also tested directly on desktop/tablet/phone via LAN)_
 
 ## 7. Decision log
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
 
+- 2026-11-06: Expanded Step 4 in `docs/PRD.md` to include web search grounding (`google.tools.googleSearch`) and multimodal file/image uploads alongside URL link import. Reason: Gemini 3.x Flash/Flash-Lite natively support image/PDF/text inputs and `@ai-sdk/google` includes built-in search grounding. Source: `node_modules/@ai-sdk/google/dist/index.d.ts` and Google AI Studio docs.
+- 2026-11-06: Chose Google Gemini (`@ai-sdk/google`) with 4 selectable models (`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite` default, `gemini-3.1-flash-lite`) split across `config/models.ts` (client-safe list) and `config/ai.ts` (`server-only` provider). Reason: free tier on Google AI Studio with instant fallback when a model hits per-model rate limits (HTTP 429 / `RESOURCE_EXHAUSTED`). Source: verified in `node_modules/@ai-sdk/google/dist/index.d.ts` and live testing.
 - 2026-10-20: Added `docs/DESIGN.md` (warm cream and butter-yellow light theme, dark brown text, one accent plus a warning color, contrast checked by the user). Reason: avoid a generic AI look. AGENTS.md now says to read it before UI work.
 - 2026-10-20: Browser automation deferred. Enable `next-devtools` at step 1 and test `browser_eval` before adding a separate Playwright MCP. Reason: fewer MCPs means fewer tokens per turn.
 - 2026-10-19: Learning mode split by novelty, not one default. The user writes what is new to them (LLM, RAG, Next.js-specific) and the agent writes what they already know (React UI, styling, basics), with active review of anything the agent writes. Reason: the user already knows React, Express and TypeScript and wants to learn the LLM and Next.js parts. Source: Anthropic's skill-formation study (arXiv 2601.20245) found question-driven AI use preserved comprehension better than delegation. AGENTS.md rule 2 updated.

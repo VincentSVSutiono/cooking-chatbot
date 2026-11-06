@@ -90,7 +90,7 @@ Work on branches with small commits. Merge to `main` only after checks pass, bec
 
 ## Definition of done (every change)
 
-The build passes. Lint, type-check and tests pass. The user has run it themselves. The docs are updated.
+The build passes. Lint, type-check and tests pass. The user has run it themselves. The docs are updated. For UI changes, the responsive testing list in `docs/DESIGN.md` has been checked.
 
 ## Keeping docs current
 
