@@ -3,4 +3,24 @@
 @theme inline {
   --font-sans: var(--font-inter);
   --font-serif: var(--font-fraunces);
+
+  --color-background: #FFF8E7;
+  --color-surface: #FFFDF5;
+  --color-border: #E8DCC0;
+  --color-text: #2B2118;
+  --color-text-muted: #6B5B4B;
+  --color-accent: #F2B544;
+  --color-accent-strong: #B26A00;
+  --color-user-message: #FBE9B7;
+  --color-warning: #B5472B;
+}
+
+:root {
+  --app-viewport-height: 100dvh;
+  --app-viewport-top: 0px;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
 }

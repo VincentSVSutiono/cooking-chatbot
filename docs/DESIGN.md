@@ -40,6 +40,19 @@ Contrast values are my estimates. **Unverified:** run each text/background pair 
 - Cook-along step text is large and high contrast.
 - Primary actions (next step, send) sit within thumb reach.
 
+## Responsive testing
+
+Test every UI change on more than one screen size: a phone, a tablet (portrait and landscape) and a laptop or desktop window. Browser device emulation (F12) is only a rough check, so use a real device when possible.
+Check these on each size:
+
+- The chat input stays visible and usable when the on-screen keyboard is open.
+- The layout still fits when the mobile address bar shows or hides (viewport height changes).
+- Nothing is hidden under notches or home bars (safe-area insets).
+- The sidebar of past chats works at every width (for example, it collapses on narrow screens).
+- Text stays readable and tap targets stay at least 44px at every size.
+- Long messages and recipe cards don't cause sideways scrolling.
+  Before using any viewport or safe-area technique, check the bundled Next.js docs and the Tailwind docs. Don't rely on memory.
+
 ## Key screens
 
 - **Chat:** standard layout. Assistant replies sit directly on the background, user messages in the soft yellow bubble.
