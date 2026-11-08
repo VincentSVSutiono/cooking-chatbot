@@ -63,7 +63,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 - **You can explain:** why validate model output with code instead of trusting it. What a schema is and how the SDK uses it to shape output. Which card parts are server vs client components.
 
 ### [ ] Step 4: Link import, web search, and file/image uploads
-- **Build:** a tool that takes a URL, fetches the page, and extracts the recipe into the same schema; web search grounding so the model can look up cooking facts online; and image/file attachments in the chat input so the user can upload photos (e.g. ingredients) or recipe files (PDF/text).
+- **Build:** a tool that takes a URL, fetches the page, and extracts the recipe into the same schema; web search grounding so the model can look up cooking facts online (and fall back to web search when a dish is not found in TheMealDB/our database); and image/file attachments in the chat input so the user can upload photos (e.g. ingredients) or recipe files (PDF/text).
 - **Skills:** `ai-sdk`, `security-and-hardening` (install), `frontend-ui-engineering`.
 - **Read first:** AI SDK: tool calling (revisit), multimodal/file attachments, provider search tools. The `security-and-hardening` skill's guidance on input validation and user-supplied URLs.
 - **Done when:** a link from a site with embedded recipe data produces the same card. An unreachable or non-recipe page gives a clear message. Only http(s) URLs are accepted, and requests to local or private addresses are refused. Web search answers a live cooking query. Uploading an image or file in chat works and the model reads its contents. The site-terms question in DECISIONS.md is resolved or consciously accepted.
