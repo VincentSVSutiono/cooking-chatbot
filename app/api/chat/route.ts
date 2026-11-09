@@ -4,8 +4,10 @@ import {
   toUIMessageStream,
   streamText,
   type UIMessage,
+  isStepCount,
 } from "ai";
 import { getChatModel, COOKING_SYSTEM_PROMPT } from "@/config/ai";
+import { cookingTools } from "@/lib/ai/tools";
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,6 +38,26 @@ export async function POST(req: Request) {
       model: getChatModel(requestedModel),
       instructions: COOKING_SYSTEM_PROMPT,
       messages: modelMessages,
+      stopWhen: isStepCount(3),
+      tools: cookingTools,
+      onToolExecutionStart: ({ toolCall }) => {
+        console.log(
+          `[Tool Start] ${toolCall.toolName} with input:`,
+          toolCall.input,
+        );
+      },
+      onToolExecutionEnd: ({ toolCall, toolExecutionMs, toolOutput }) => {
+        const matchCount =
+          toolOutput.type === "tool-result" &&
+          toolOutput.output &&
+          typeof toolOutput.output === "object" &&
+          "totalMatches" in toolOutput.output
+            ? (toolOutput.output as { totalMatches: number }).totalMatches
+            : "N/A";
+        console.log(
+          `[Tool End] ${toolCall.toolName} in ${toolExecutionMs}ms (matches: ${matchCount})`,
+        );
+      },
     });
 
     const uiStream = toUIMessageStream({

@@ -111,6 +111,12 @@ async function searchMultiWordMatches(query: string): Promise<RawMealRecord[]> {
     }
   }
 
+  // Enforce meaningful overlap to prevent single incidental keyword false-positives
+  // For a 2-word query ("spaghetti carbonara"), both words must appear in the title.
+  // For 3+ words, at least 2 words or >= 50% of the query terms must appear in the title.
+  const minRequiredMatches =
+    terms.length === 2 ? 2 : Math.max(2, Math.ceil(terms.length * 0.5));
+
   // Score candidates by how many query words appear in their meal title
   const scoredMeals = Array.from(mealMap.values())
     .map((meal) => {
@@ -118,7 +124,7 @@ async function searchMultiWordMatches(query: string): Promise<RawMealRecord[]> {
       const matchCount = terms.filter((t) => title.includes(t)).length;
       return { meal, matchCount };
     })
-    .filter((item) => item.matchCount > 0)
+    .filter((item) => item.matchCount >= minRequiredMatches)
     .sort((a, b) => b.matchCount - a.matchCount);
 
   return scoredMeals.map((item) => item.meal);

@@ -48,12 +48,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 1: Streaming chat with a cooking system prompt — Done (Gemini models in `config/models.ts` & `config/ai.ts`, streaming route in `app/api/chat/route.ts`, responsive UI with model switcher).
 
-### [ ] Step 2: Dish-name search with tool calling
-- **Build:** a tool the model can call to search TheMealDB by dish name. This calls the live API during development only. Step 5b replaces it with our own database, so keep the tool's inputs and outputs stable and only the data source behind it changes.
-- **Skills:** `ai-sdk`, `api-and-interface-design` (install), TheMealDB's `SKILL.md` (install).
-- **Read first:** AI SDK: tool calling. TheMealDB's API docs (themealdb.com/documentation).
-- **Done when:** "I want to make carbonara" triggers the tool (visible in logs) and the reply uses what it returned. A dish not found gets an honest "couldn't find it," not an invented recipe. No amounts appear that weren't in the tool result. TheMealDB credit is shown. The free key's real limits and recipe count are tested and written to DECISIONS.md.
-- **You can explain:** what "the model calls a tool" really means (it requests, our code runs it). Why the result goes back into the conversation. What happens when the model doesn't call the tool.
+### [x] Step 2: Dish-name search with tool calling — Done (TheMealDB search & normalizer in `lib/recipes/search.ts`, tool in `lib/ai/tools.ts`, streaming loop with `stopWhen: isStepCount(3)` and tool logging in `app/api/chat/route.ts`, grounded prompt in `config/ai.ts`, tool status pill & attribution footer in UI).
 
 ### [ ] Step 3: Structured recipe and recipe card
 - **Build:** a recipe schema (title, ingredients with amounts, steps, times, safety note, source), validation of model/tool output against it, and a recipe card UI.
@@ -99,5 +94,6 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ## 7. Changes log
 
+- 2026-11-09: Completed Step 2 (TheMealDB recipe search with normalizer and fallbacks, AI SDK tool calling, 3-step streaming route, grounded prompt, status pill, and per-message attribution).
 - 2026-11-06: Added image/file uploads and web search to scope and Step 4 (YouTube links excluded). Reason: Gemini 3.x Flash/Flash-Lite natively accept multimodal inputs and `@ai-sdk/google` supports web search grounding, making them high-value additions for a cooking companion.
 - 2026-11-06: Completed Step 1 (streaming chat, cooking system prompt, Claude-style responsive model switcher across 4 Gemini models, and quota error recovery).

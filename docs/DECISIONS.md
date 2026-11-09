@@ -10,7 +10,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - **Free key:** test key `1` is for development and educational use. Public release or production use needs their paid supporter key. **[verified, checked Oct 2026]** (themealdb.com/api.php, /terms_of_use.php)
 - **Terms:** copying and modifying content returned by the **official endpoints** is allowed. Don't scrape the website, don't resell the data, keep copyright notices, credit the source. **[verified]**
 - **Credit text:** `Recipe data and imagery: TheMealDB (https://www.themealdb.com/)`
-- **Free-key limits per their docs:** the filter takes a single ingredient (multi-ingredient is premium), and list results are capped at 100 items. We do multi-ingredient matching ourselves from our own database. **Real limits and recipe count: [unverified], test in step 2.**
+- **Free-key limits per their docs:** the filter takes a single ingredient (multi-ingredient is premium), and list results are capped at 100 items. We do multi-ingredient matching ourselves from our own database. **Real limits and recipe count: 790 unique recipes across a–z, 26 sequential requests in 8.4s (~325ms/req) with 0 rate limiting on test key 1. [verified, step 2]**
 - **Their own guidance for AI use:** keep original measures, don't infer temperatures. **[verified]** They publish `themealdb.com/AGENTS.md`, `/SKILL.md` and OpenAPI specs, plus docs at themealdb.com/documentation.
 - **Open:** is a personal-only deployment on the free key acceptable? Ask them by email before step 7. The supporter price is **[unverified]**.
 - **Rejected sources:**
@@ -102,8 +102,9 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 ## 6. Open items
 
 - [ ] Email TheMealDB about a personal-only deployment _(user, before step 7)_
-- [ ] TheMealDB free-key real limits and recipe count _(step 2)_
-- [ ] Test tool calling and search grounding compatibility on the chosen Gemini models _(step 2 and 4)_
+- [x] TheMealDB free-key real limits and recipe count (790 unique recipes across a–z, 0 rate limit on 26 rapid requests) _(step 2)_
+- [x] Test tool calling compatibility on chosen Gemini models (reliable tool calling & strict grounding) _(step 2)_
+- [ ] Test search grounding compatibility on chosen Gemini models _(step 4)_
 - [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed _(step 1)_
 - [ ] Pick the embedding model _(step 5b)_
 - [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
@@ -121,6 +122,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
 
+- 2026-11-09: Verified TheMealDB test key 1 contains 790 recipes across a-z with ~325ms average latency and reliable tool-calling on Gemini models. Reason: empirical verification for Step 2. Source: live testing against TheMealDB and Gemini 3.x.
 - 2026-11-06: Expanded Step 4 in `docs/PRD.md` to include web search grounding (`google.tools.googleSearch`) and multimodal file/image uploads alongside URL link import. Reason: Gemini 3.x Flash/Flash-Lite natively support image/PDF/text inputs and `@ai-sdk/google` includes built-in search grounding. Source: `node_modules/@ai-sdk/google/dist/index.d.ts` and Google AI Studio docs.
 - 2026-11-06: Chose Google Gemini (`@ai-sdk/google`) with 4 selectable models (`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite` default, `gemini-3.1-flash-lite`) split across `config/models.ts` (client-safe list) and `config/ai.ts` (`server-only` provider). Reason: free tier on Google AI Studio with instant fallback when a model hits per-model rate limits (HTTP 429 / `RESOURCE_EXHAUSTED`). Source: verified in `node_modules/@ai-sdk/google/dist/index.d.ts` and live testing.
 - 2026-10-20: Added `docs/DESIGN.md` (warm cream and butter-yellow light theme, dark brown text, one accent plus a warning color, contrast checked by the user). Reason: avoid a generic AI look. AGENTS.md now says to read it before UI work.

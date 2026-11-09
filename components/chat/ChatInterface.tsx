@@ -8,24 +8,27 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useChat } from "@ai-sdk/react";
-import { Send, Plus, AlertCircle, UtensilsCrossed, Square } from "lucide-react";
+import {
+  Send,
+  Plus,
+  AlertCircle,
+  UtensilsCrossed,
+  Square,
+  Loader2,
+} from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import ModelSelector from "./ModelSelector";
+import ToolStatusPill from "./ToolStatusPill";
+import RecipeAttribution, {
+  getMatchedRecipesFromMessage,
+} from "./RecipeAttribution";
+import ChatWelcomeScreen, {
+  STARTER_PROMPTS_POOL,
+  pickRandomPrompts,
+} from "./ChatWelcomeScreen";
 import { DEFAULT_MODEL_ID, type ModelId } from "@/config/models";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useAutogrowTextarea } from "@/hooks/useAutogrowTextarea";
-
-const STARTER_PROMPTS_POOL = [
-  "What is an easy, 20-minute dinner recipe for a complete beginner?",
-  "How do I dice an onion safely without crying?",
-  "What are some of the most essential cooking tools a total beginner actually needs?",
-  "I have eggs, cheese, and bread in my kitchen. What can I make?",
-  "How do I cook fluffy white rice on the stove without burning the bottom?",
-  "What does it mean to simmer something, and what should it look like in the pan?",
-  "How do I pan-sear chicken breast so it stays juicy and tender?",
-  "What are 3 quick, beginner-friendly recipes I can try this week?",
-  "What is the difference between sautéing and pan-frying?",
-];
 
 const MARKDOWN_COMPONENTS: Components = {
   strong: ({ children }) => (
@@ -52,11 +55,6 @@ const MARKDOWN_COMPONENTS: Components = {
   ),
   hr: () => <hr className="my-3 border-border" />,
 };
-
-function pickRandomPrompts(pool: string[], count = 3): string[] {
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
 
 export default function ChatInterface() {
   const [input, setInput] = useState("");
@@ -173,43 +171,11 @@ export default function ChatInterface() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-6 pb-2 sm:pb-4">
           {messages.length === 0 ? (
             /* Empty State - Sunny kitchen welcome with clickable starter cards */
-            <section
-              aria-labelledby="welcome-heading"
-              className="my-1 sm:my-auto flex flex-col items-start gap-3.5 sm:gap-6 rounded-xl border border-border bg-surface p-4 sm:p-7"
-            >
-              <div className="space-y-1.5 sm:space-y-2">
-                <h2
-                  id="welcome-heading"
-                  className="font-serif text-xl sm:text-2xl font-semibold text-text"
-                >
-                  Welcome to your kitchen companion
-                </h2>
-                <p className="max-w-[65ch] text-sm sm:text-base leading-relaxed text-text-muted">
-                  Ask about quick recipes, ingredients in your fridge, or
-                  cooking techniques. I&apos;ll guide you step by step with zero
-                  judgment!
-                </p>
-              </div>
-
-              <div className="w-full space-y-2 sm:space-y-2.5">
-                <p className="text-xs sm:text-sm font-medium text-text-muted">
-                  Try asking one of these to start:
-                </p>
-                <div className="grid grid-cols-1 gap-2 sm:gap-2.5">
-                  {starterPrompts.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => handleStarterClick(prompt)}
-                      disabled={isBusy}
-                      className="flex min-h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-border bg-background px-3.5 sm:px-4 py-2.5 sm:py-3 text-left text-sm sm:text-base leading-snug sm:leading-relaxed text-text transition-colors hover:border-accent-strong hover:bg-user-message focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <span>{prompt}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
+            <ChatWelcomeScreen
+              prompts={starterPrompts}
+              onSelectPrompt={handleStarterClick}
+              disabled={isBusy}
+            />
           ) : (
             /* Active Message List */
             <div
@@ -218,8 +184,18 @@ export default function ChatInterface() {
               aria-label="Chat conversation"
               className="flex flex-col gap-6"
             >
-              {messages.map((message) => {
+              {messages.map((message, messageIndex) => {
                 const isUser = message.role === "user";
+                const isLastMessage = messageIndex === messages.length - 1;
+                const matchedRecipes = !isUser
+                  ? getMatchedRecipesFromMessage(message)
+                  : [];
+
+                const hasTextPart = message.parts.some(
+                  (p) => p.type === "text" && p.text.trim().length > 0,
+                );
+                const isAwaitingAssistantText =
+                  isLastMessage && isBusy && !hasTextPart && !isUser;
 
                 return (
                   <article
@@ -241,6 +217,15 @@ export default function ChatInterface() {
                       }
                     >
                       {message.parts.map((part, index) => {
+                        if (part.type === "tool-searchDishByName") {
+                          return (
+                            <ToolStatusPill
+                              key={`${message.id}-tool-${index}`}
+                              {...part}
+                            />
+                          );
+                        }
+
                         if (part.type === "text") {
                           if (isUser) {
                             return (
@@ -266,6 +251,20 @@ export default function ChatInterface() {
                         }
                         return null;
                       })}
+
+                      {/* If tool parts ran but assistant text has not arrived yet */}
+                      {isAwaitingAssistantText && (
+                        <div className="flex items-center gap-2 py-1 text-sm text-text-muted animate-pulse">
+                          <Loader2
+                            className="h-3.5 w-3.5 animate-spin text-accent-strong"
+                            aria-hidden="true"
+                          />
+                          <span>Writing recipe instructions&hellip;</span>
+                        </div>
+                      )}
+
+                      {/* Attribution footer when recipes were retrieved */}
+                      <RecipeAttribution recipes={matchedRecipes} />
                     </div>
                   </article>
                 );
@@ -275,9 +274,13 @@ export default function ChatInterface() {
               {status === "submitted" && (
                 <div
                   role="status"
-                  className="text-sm font-medium text-text-muted animate-pulse"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-text-muted animate-pulse"
                 >
-                  Thinking in the kitchen...
+                  <Loader2
+                    className="h-3.5 w-3.5 animate-spin text-accent-strong"
+                    aria-hidden="true"
+                  />
+                  <span>Thinking in the kitchen&hellip;</span>
                 </div>
               )}
             </div>
