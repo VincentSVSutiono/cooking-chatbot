@@ -31,7 +31,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 ## 3. LLM provider
 
 - **Design:** shared model IDs live in `config/models.ts` (client-safe) and provider instantiation lives in `config/ai.ts` (`server-only`). Nothing provider-specific anywhere else, so swapping is a config change.
-- **Chat model:** Google Gemini (`@ai-sdk/google` via Google AI Studio free tier), selectable in UI between `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite` (default), and `gemini-3.1-flash-lite`. **[verified, step 1]**
+- **Chat model:** Google Gemini (`@ai-sdk/google` via Google AI Studio free tier), selectable in UI between `gemini-3.6-flash`, `gemini-3.5-flash-lite` (default), and `gemini-3.1-flash-lite` (`gemini-3.8-flash` dropped in step 2 due to silent stream failures). **[verified, step 2]**
 - **Embedding model:** a separate model, decided in step 5b. Zen lists none, so it will come from another provider. Free options **[unverified]**. Changing it later means re-embedding every recipe, because vectors from different models can't be compared.
 
 ### Swap checklist (use for any provider)
@@ -122,6 +122,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
 
+- 2026-11-09: Dropped gemini-3.8-flash from AVAILABLE_MODELS, leaving 3 selectable Gemini models (3.6-flash, 3.5-flash-lite default, 3.1-flash-lite). Reason: 3.8-flash produced empty response streams during live testing. Source: user verification in step 2.
 - 2026-11-09: Verified TheMealDB test key 1 contains 790 recipes across a-z with ~325ms average latency and reliable tool-calling on Gemini models. Reason: empirical verification for Step 2. Source: live testing against TheMealDB and Gemini 3.x.
 - 2026-11-06: Expanded Step 4 in `docs/PRD.md` to include web search grounding (`google.tools.googleSearch`) and multimodal file/image uploads alongside URL link import. Reason: Gemini 3.x Flash/Flash-Lite natively support image/PDF/text inputs and `@ai-sdk/google` includes built-in search grounding. Source: `node_modules/@ai-sdk/google/dist/index.d.ts` and Google AI Studio docs.
 - 2026-11-06: Chose Google Gemini (`@ai-sdk/google`) with 4 selectable models (`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite` default, `gemini-3.1-flash-lite`) split across `config/models.ts` (client-safe list) and `config/ai.ts` (`server-only` provider). Reason: free tier on Google AI Studio with instant fallback when a model hits per-model rate limits (HTTP 429 / `RESOURCE_EXHAUSTED`). Source: verified in `node_modules/@ai-sdk/google/dist/index.d.ts` and live testing.
