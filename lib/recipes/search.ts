@@ -57,22 +57,26 @@ export function normalizeMealRecord(raw: RawMealRecord): NormalizedRecipe {
   };
 }
 
+const THEMEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
+
+async function fetchMealRecords(endpoint: string): Promise<RawMealRecord[]> {
+  try {
+    const res = await fetch(`${THEMEALDB_BASE_URL}/${endpoint}`);
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as { meals?: unknown };
+    return Array.isArray(data.meals) ? (data.meals as RawMealRecord[]) : [];
+  } catch (error) {
+    console.error(`TheMealDB fetch error (${endpoint}):`, error);
+    return [];
+  }
+}
+
 async function fetchMealsByTerm(term: string): Promise<RawMealRecord[]> {
   const trimmed = term.trim();
   if (!trimmed) return [];
 
-  try {
-    const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      return [];
-    }
-    const data = (await res.json()) as { meals?: unknown };
-    return Array.isArray(data.meals) ? (data.meals as RawMealRecord[]) : [];
-  } catch (error) {
-    console.error("TheMealDB fetch error:", error);
-    return [];
-  }
+  return fetchMealRecords(`search.php?s=${encodeURIComponent(trimmed)}`);
 }
 
 // Only US to UK and not the other way is because the MealDB data is based of british culture
@@ -84,7 +88,7 @@ const US_TO_UK_SYNONYMS: Record<string, string> = {
   arugula: "rocket",
 };
 
-function translateSynonyms(query: string): string | null {
+export function translateSynonyms(query: string): string | null {
   let translated = query;
   for (const [usWord, ukWord] of Object.entries(US_TO_UK_SYNONYMS)) {
     const regex = new RegExp(`\\b${usWord}\\b`, "gi");
@@ -179,4 +183,16 @@ export async function searchRecipesByName(
     offset,
     recipes: normalizedMeals,
   };
+}
+
+export async function lookupRecipeById(
+  id: string,
+): Promise<NormalizedRecipe | null> {
+  const trimmed = id.trim();
+  if (!trimmed) return null;
+
+  const meals = await fetchMealRecords(
+    `lookup.php?i=${encodeURIComponent(trimmed)}`,
+  );
+  return meals[0] ? normalizeMealRecord(meals[0]) : null;
 }

@@ -50,12 +50,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 2: Dish-name search with tool calling — Done (TheMealDB search & normalizer in `lib/recipes/search.ts`, tool in `lib/ai/tools.ts`, streaming loop with `stopWhen: isStepCount(3)` and tool logging in `app/api/chat/route.ts`, grounded prompt in `config/ai.ts`, tool status pill & attribution footer in UI).
 
-### [ ] Step 3: Structured recipe and recipe card
-- **Build:** a recipe schema (title, ingredients with amounts, steps, times, safety note, source), validation of model/tool output against it, and a recipe card UI.
-- **Skills:** `ai-sdk`, `frontend-ui-engineering`, `api-and-interface-design`, `test-driven-development` (install).
-- **Read first:** AI SDK: structured output and schemas. Next.js: composing server and client components.
-- **Done when:** a recipe request renders as a card, not a wall of text. A deliberately malformed result is caught and handled. The card shows its source and credit.
-- **You can explain:** why validate model output with code instead of trusting it. What a schema is and how the SDK uses it to shape output. Which card parts are server vs client components.
+### [x] Step 3: Structured recipe and recipe card — Done (Zod v4 schema in `lib/recipes/schema.ts`, Vitest unit test suite in `lib/recipes/__tests__/`, AI SDK `Output.object` structure pipeline in `lib/recipes/structure.ts`, two-step tool flow in `lib/ai/tools.ts`, `<RecipeCard />` with dynamic photo modal lightbox and collapsible steps, component separation and `lib/ai/types.ts`).
 
 ### [ ] Step 4: Link import, web search, and file/image uploads
 - **Build:** a tool that takes a URL, fetches the page, and extracts the recipe into the same schema; web search grounding so the model can look up cooking facts online (and fall back to web search when a dish is not found in TheMealDB/our database); and image/file attachments in the chat input so the user can upload photos (e.g. ingredients) or recipe files (PDF/text).
@@ -93,6 +88,8 @@ Each step ends with a working app. Load the named skills before the relevant wor
 - **You can explain:** what CI checks and what it can't catch. Why only `main` goes to production and what preview deployments are. Why the cron must run a database query.
 
 ## 7. Changes log
+
+- 2026-11-11: Completed Step 3 (Structured recipe schema, output validation with Vitest tests, two-step tool flow with compact match previews, full `<RecipeCard />` with dynamic attribution and photo modal lightbox, component separation and `lib/ai/types.ts`).
 
 - 2026-11-09: Completed Step 2 (TheMealDB recipe search with normalizer and fallbacks, AI SDK tool calling, 3-step streaming route, grounded prompt, status pill, and per-message attribution).
 - 2026-11-06: Added image/file uploads and web search to scope and Step 4 (YouTube links excluded). Reason: Gemini 3.x Flash/Flash-Lite natively accept multimodal inputs and `@ai-sdk/google` supports web search grounding, making them high-value additions for a cooking companion.

@@ -122,6 +122,9 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
 
+- 2026-11-11: Adopted Vitest for test runner, AI SDK `Output.object` with Zod v4 for recipe structuring, and isolated AI types in `lib/ai/types.ts`. Reason: fast ESM testing for schema/normalizers, guaranteed valid recipe data, and clean architecture without coupling UI components to tool output types. Source: `lib/recipes/schema.ts`, `lib/recipes/__tests__/`, `lib/ai/types.ts`.
+- 2026-11-11: Implemented two-step recipe flow (`searchDishByName` compact previews -> `showRecipeCard` full card) with dynamic attribution and photo modal lightbox. Reason: compact search saves LLM token budget and avoids chat clutter; dynamic `recipe.source` attribution prevents hardcoding TheMealDB for future external recipes (Steps 4 & 5). Source: `lib/ai/tools.ts`, `components/recipes/RecipeCard.tsx`.
+
 - 2026-11-09: Dropped gemini-3.8-flash from AVAILABLE_MODELS, leaving 3 selectable Gemini models (3.6-flash, 3.5-flash-lite default, 3.1-flash-lite). Reason: 3.8-flash produced empty response streams during live testing. Source: user verification in step 2.
 - 2026-11-09: Verified TheMealDB test key 1 contains 790 recipes across a-z with ~325ms average latency and reliable tool-calling on Gemini models. Reason: empirical verification for Step 2. Source: live testing against TheMealDB and Gemini 3.x.
 - 2026-11-06: Expanded Step 4 in `docs/PRD.md` to include web search grounding (`google.tools.googleSearch`) and multimodal file/image uploads alongside URL link import. Reason: Gemini 3.x Flash/Flash-Lite natively support image/PDF/text inputs and `@ai-sdk/google` includes built-in search grounding. Source: `node_modules/@ai-sdk/google/dist/index.d.ts` and Google AI Studio docs.

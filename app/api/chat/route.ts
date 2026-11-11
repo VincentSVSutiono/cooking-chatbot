@@ -7,7 +7,7 @@ import {
   isStepCount,
 } from "ai";
 import { getChatModel, COOKING_SYSTEM_PROMPT } from "@/config/ai";
-import { cookingTools } from "@/lib/ai/tools";
+import { createCookingTools } from "@/lib/ai/tools";
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       instructions: COOKING_SYSTEM_PROMPT,
       messages: modelMessages,
       stopWhen: isStepCount(3),
-      tools: cookingTools,
+      tools: createCookingTools(requestedModel),
       onToolExecutionStart: ({ toolCall }) => {
         console.log(
           `[Tool Start] ${toolCall.toolName} with input:`,
@@ -47,15 +47,20 @@ export async function POST(req: Request) {
         );
       },
       onToolExecutionEnd: ({ toolCall, toolExecutionMs, toolOutput }) => {
-        const matchCount =
+        const out =
           toolOutput.type === "tool-result" &&
           toolOutput.output &&
-          typeof toolOutput.output === "object" &&
-          "totalMatches" in toolOutput.output
-            ? (toolOutput.output as { totalMatches: number }).totalMatches
-            : "N/A";
+          typeof toolOutput.output === "object"
+            ? (toolOutput.output as Record<string, unknown>)
+            : null;
+        const summary =
+          out && "totalMatches" in out
+            ? `matches: ${out.totalMatches}`
+            : out && "status" in out
+              ? `status: ${out.status}`
+              : "done";
         console.log(
-          `[Tool End] ${toolCall.toolName} in ${toolExecutionMs}ms (matches: ${matchCount})`,
+          `[Tool End] ${toolCall.toolName} in ${toolExecutionMs}ms (${summary})`,
         );
       },
     });

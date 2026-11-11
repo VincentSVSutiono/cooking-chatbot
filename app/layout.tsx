@@ -29,9 +29,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fraunces.variable} h-full font-sans antialiased`}
+      className={`${inter.variable} ${fraunces.variable} h-full overflow-x-hidden font-sans antialiased`}
     >
-      <body className="h-full overflow-hidden flex flex-col">{children}</body>
+      <body className="h-full overflow-x-hidden overflow-y-hidden flex flex-col">{children}</body>
     </html>
   );
 }

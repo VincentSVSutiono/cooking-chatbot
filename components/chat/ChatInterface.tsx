@@ -1,24 +1,14 @@
 "use client";
 
-import {
-  useState,
-  useRef,
-  useEffect,
-  type SubmitEvent,
-  type KeyboardEvent,
-} from "react";
+import { useState, useRef, useEffect, type KeyboardEvent, type FormEvent } from "react";
 import { useChat } from "@ai-sdk/react";
-import {
-  Send,
-  Plus,
-  AlertCircle,
-  UtensilsCrossed,
-  Square,
-  Loader2,
-} from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
-import ModelSelector from "./ModelSelector";
+import ChatHeader from "./ChatHeader";
+import ChatInputBar from "./ChatInputBar";
 import ToolStatusPill from "./ToolStatusPill";
+import RecipeMatchList from "./RecipeMatchList";
+import RecipeCard, { RecipeCardError } from "@/components/recipes/RecipeCard";
 import RecipeAttribution, {
   getMatchedRecipesFromMessage,
 } from "./RecipeAttribution";
@@ -27,6 +17,13 @@ import ChatWelcomeScreen, {
   pickRandomPrompts,
 } from "./ChatWelcomeScreen";
 import { DEFAULT_MODEL_ID, type ModelId } from "@/config/models";
+import type { NormalizedRecipe } from "@/lib/recipes/search";
+import {
+  isSearchToolPart,
+  isRecipeCardToolPart,
+  isTextPart,
+  isSuccessfulRecipeCard,
+} from "@/lib/ai/types";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useAutogrowTextarea } from "@/hooks/useAutogrowTextarea";
 
@@ -91,18 +88,17 @@ export default function ChatInterface() {
     }
   }, [messages, status]);
 
-  function handleSubmit(e?: SubmitEvent<HTMLFormElement>) {
+  function handleSubmit(e?: FormEvent<HTMLFormElement>) {
     if (e) e.preventDefault();
     const trimmed = input.trim();
     if (!trimmed || isBusy) return;
 
-    // SendMessage hits api/chat endpoint with selected model
     sendMessage({ text: trimmed }, { body: { model: selectedModel } });
     setInput("");
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // On touchscreens / mobile keyboards, let Enter create a new line; users tap the Send button to submit.
+    // On touchscreens / mobile keyboards, let Enter create a new line; users tap Send.
     // On desktop with physical keyboard, Enter sends, Shift+Enter creates a new line.
     const isTouchDevice =
       typeof window !== "undefined" &&
@@ -120,8 +116,16 @@ export default function ChatInterface() {
   }
 
   function handleStarterClick(promptText: string) {
-    // SendMessage hits api/chat endpoint with selected model
     sendMessage({ text: promptText }, { body: { model: selectedModel } });
+  }
+
+  function handleSelectRecipe(recipe: NormalizedRecipe) {
+    sendMessage(
+      {
+        text: `Show me the recipe for ${recipe.name}`,
+      },
+      { body: { model: selectedModel } },
+    );
   }
 
   function handleNewChat() {
@@ -134,50 +138,28 @@ export default function ChatInterface() {
 
   return (
     <div
-      className="fixed inset-x-0 flex flex-col bg-background text-text overflow-hidden"
+      className="relative flex h-full w-full flex-col bg-background text-text overflow-hidden"
       style={{
         height: "var(--app-viewport-height, 100dvh)",
         top: "var(--app-viewport-top, 0px)",
       }}
     >
-      {/* Top Header - Warm kitchen identity, >=44px tap target on New chat */}
-      <header className="sticky top-0 z-10 shrink-0 border-b border-border bg-surface/95 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 landscape:py-1.5 backdrop-blur-xs">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2 sm:gap-3">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
-            <UtensilsCrossed
-              className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-accent-strong"
-              aria-hidden="true"
-            />
-            <h1 className="truncate font-serif text-base font-semibold tracking-tight sm:text-xl">
-              Beginner Cooking Companion
-            </h1>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleNewChat}
-            disabled={messages.length === 0 && !error && !isBusy}
-            className="inline-flex min-h-10 sm:min-h-11 min-w-10 sm:min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 sm:px-3.5 py-2 text-sm font-medium text-text transition-colors hover:bg-user-message focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Start a new chat"
-          >
-            <Plus className="h-4 w-4 text-accent-strong" aria-hidden="true" />
-            <span className="hidden sm:inline">New chat</span>
-          </button>
-        </div>
-      </header>
+      {/* Top Header */}
+      <ChatHeader
+        onNewChat={handleNewChat}
+        canNewChat={messages.length > 0 || Boolean(error) || isBusy}
+      />
 
       {/* Scrollable Message Area */}
-      <main className="flex-1 min-h-0 overflow-y-auto px-3.5 sm:px-4 md:px-6 pt-3 sm:pt-6 pb-4 sm:pb-6">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-6 pb-2 sm:pb-4">
+      <main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 md:px-8 pt-3 sm:pt-6 pb-4 sm:pb-6 [scrollbar-gutter:stable]">
+        <div className="mx-auto flex w-full max-w-[704px] flex-col gap-4 sm:gap-6 pb-2 sm:pb-4">
           {messages.length === 0 ? (
-            /* Empty State - Sunny kitchen welcome with clickable starter cards */
             <ChatWelcomeScreen
               prompts={starterPrompts}
               onSelectPrompt={handleStarterClick}
               disabled={isBusy}
             />
           ) : (
-            /* Active Message List */
             <div
               role="log"
               aria-live="polite"
@@ -191,8 +173,10 @@ export default function ChatInterface() {
                   ? getMatchedRecipesFromMessage(message)
                   : [];
 
+                const hasRecipeCard = !isUser && message.parts.some(isSuccessfulRecipeCard);
+
                 const hasTextPart = message.parts.some(
-                  (p) => p.type === "text" && p.text.trim().length > 0,
+                  (p) => isTextPart(p) && p.text.trim().length > 0,
                 );
                 const isAwaitingAssistantText =
                   isLastMessage && isBusy && !hasTextPart && !isUser;
@@ -200,7 +184,7 @@ export default function ChatInterface() {
                 return (
                   <article
                     key={message.id}
-                    className={`flex flex-col ${
+                    className={`flex flex-col w-full min-w-0 ${
                       isUser ? "items-end" : "items-start"
                     }`}
                   >
@@ -208,40 +192,71 @@ export default function ChatInterface() {
                       {isUser ? "You" : "Cooking Companion"}
                     </span>
 
-                    {/* Per DESIGN.md: Assistant sits on background, user gets soft yellow bubble */}
                     <div
                       className={
                         isUser
-                          ? "max-w-[68ch] rounded-2xl border border-border bg-user-message px-4 py-3 text-base leading-relaxed text-text"
-                          : "max-w-[68ch] text-base leading-relaxed text-text"
+                          ? "max-w-[85%] sm:max-w-[75%] rounded-2xl border border-border bg-user-message px-4 py-3 text-base leading-relaxed text-text break-words"
+                          : "w-full min-w-0 text-base leading-relaxed text-text"
                       }
                     >
                       {message.parts.map((part, index) => {
-                        if (part.type === "tool-searchDishByName") {
+                        if (isSearchToolPart(part)) {
+                          const hasMatches =
+                            part.state === "output-available" &&
+                            Boolean(
+                              part.output?.found &&
+                                part.output.recipes.length > 0,
+                            );
+
                           return (
-                            <ToolStatusPill
-                              key={`${message.id}-tool-${index}`}
-                              {...part}
-                            />
+                            <div key={`${message.id}-tool-search-${index}`}>
+                              <ToolStatusPill
+                                toolName="searchDishByName"
+                                {...part}
+                              />
+                              {hasMatches && part.output && (
+                                <RecipeMatchList
+                                  recipes={part.output.recipes}
+                                  onSelectRecipe={handleSelectRecipe}
+                                  disabled={isBusy}
+                                />
+                              )}
+                            </div>
                           );
                         }
 
-                        if (part.type === "text") {
-                          if (isUser) {
-                            return (
-                              <div
-                                key={`${message.id}-text-${index}`}
-                                className="whitespace-pre-wrap break-words"
-                              >
-                                {part.text}
-                              </div>
-                            );
-                          }
+                        if (isRecipeCardToolPart(part)) {
+                          const isAvailable =
+                            part.state === "output-available" &&
+                            Boolean(part.output);
 
+                          return (
+                            <div key={`${message.id}-tool-card-${index}`}>
+                              <ToolStatusPill
+                                toolName="showRecipeCard"
+                                {...part}
+                              />
+                              {isAvailable &&
+                                part.output?.status === "success" && (
+                                  <RecipeCard recipe={part.output.recipe} />
+                                )}
+                              {isAvailable &&
+                                part.output &&
+                                part.output.status !== "success" && (
+                                  <RecipeCardError
+                                    mealName={part.output.mealName}
+                                    message={part.output.message}
+                                  />
+                                )}
+                            </div>
+                          );
+                        }
+
+                        if (isTextPart(part)) {
                           return (
                             <div
                               key={`${message.id}-text-${index}`}
-                              className="break-words"
+                              className="prose-cooking"
                             >
                               <ReactMarkdown components={MARKDOWN_COMPONENTS}>
                                 {part.text}
@@ -249,40 +264,32 @@ export default function ChatInterface() {
                             </div>
                           );
                         }
+
                         return null;
                       })}
 
-                      {/* If tool parts ran but assistant text has not arrived yet */}
+                      {/* Subtle loading indicator while assistant thinking */}
                       {isAwaitingAssistantText && (
-                        <div className="flex items-center gap-2 py-1 text-sm text-text-muted animate-pulse">
+                        <div
+                          className="flex items-center gap-2 py-1 text-sm text-text-muted"
+                          aria-label="Cooking companion is thinking"
+                        >
                           <Loader2
-                            className="h-3.5 w-3.5 animate-spin text-accent-strong"
+                            className="h-4 w-4 animate-spin text-accent-strong"
                             aria-hidden="true"
                           />
-                          <span>Writing recipe instructions&hellip;</span>
+                          <span>Thinking about your recipe&hellip;</span>
                         </div>
                       )}
 
-                      {/* Attribution footer when recipes were retrieved */}
-                      <RecipeAttribution recipes={matchedRecipes} />
+                      {/* Attribution footer when recipes were retrieved via search and no RecipeCard is present */}
+                      {!hasRecipeCard && (
+                        <RecipeAttribution recipes={matchedRecipes} />
+                      )}
                     </div>
                   </article>
                 );
               })}
-
-              {/* Streaming Indicator */}
-              {status === "submitted" && (
-                <div
-                  role="status"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-text-muted animate-pulse"
-                >
-                  <Loader2
-                    className="h-3.5 w-3.5 animate-spin text-accent-strong"
-                    aria-hidden="true"
-                  />
-                  <span>Thinking in the kitchen&hellip;</span>
-                </div>
-              )}
             </div>
           )}
 
@@ -325,60 +332,20 @@ export default function ChatInterface() {
         </div>
       </main>
 
-      {/* Bottom Sticky Input Bar - Claude-style layered card */}
-      <footer className="w-full shrink-0 bg-background px-3 pt-1 pb-2 sm:px-4 sm:pb-3 md:px-6">
-        <form
-          onSubmit={handleSubmit}
-          className="mx-auto flex w-full max-w-3xl flex-col rounded-2xl border border-border bg-surface p-2.5 sm:p-3 shadow-xs transition-colors focus-within:border-accent-strong"
-        >
-          <label htmlFor="chat-input" className="sr-only">
-            Ask a cooking question
-          </label>
-          <textarea
-            ref={textareaRef}
-            id="chat-input"
-            rows={1}
-            autoComplete="off"
-            autoCorrect="off"
-            value={input}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask a cooking related question..."
-            className="w-full resize-none bg-transparent px-1 py-1 text-base leading-6 text-text placeholder:text-text-muted focus:outline-none min-h-[28px] max-h-32 sm:max-h-36 md:max-h-40 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          />
-
-          {/* Bottom Toolbar Row - Model selector on left, Send/Stop button on right */}
-          <div className="flex shrink-0 items-center justify-between pt-1.5 sm:pt-2">
-            <ModelSelector
-              selectedModel={selectedModel}
-              onSelectModel={setSelectedModel}
-              disabled={isBusy}
-            />
-
-            {isBusy ? (
-              <button
-                type="button"
-                onClick={stop}
-                aria-label="Stop generating response"
-                className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-surface text-accent-strong transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
-              >
-                <Square className="h-4 w-4 fill-current" aria-hidden="true" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!input.trim()}
-                aria-label="Send message"
-                className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-text transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Send className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        </form>
-      </footer>
+      {/* Bottom Sticky Input Bar */}
+      <ChatInputBar
+        input={input}
+        onInputChange={setInput}
+        onSubmit={handleSubmit}
+        onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        isBusy={isBusy}
+        onStop={stop}
+        selectedModel={selectedModel}
+        onSelectModel={setSelectedModel}
+        textareaRef={textareaRef}
+      />
     </div>
   );
 }
