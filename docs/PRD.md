@@ -52,12 +52,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 3: Structured recipe and recipe card — Done (Zod v4 schema in `lib/recipes/schema.ts`, Vitest unit test suite in `lib/recipes/__tests__/`, AI SDK `Output.object` structure pipeline in `lib/recipes/structure.ts`, two-step tool flow in `lib/ai/tools.ts`, `<RecipeCard />` with dynamic photo modal lightbox and collapsible steps, component separation and `lib/ai/types.ts`).
 
-### [ ] Step 4: Link import, web search, and file/image uploads
-- **Build:** a tool that takes a URL, fetches the page, and extracts the recipe into the same schema; web search grounding so the model can look up cooking facts online (and fall back to web search when a dish is not found in TheMealDB/our database); and image/file attachments in the chat input so the user can upload photos (e.g. ingredients) or recipe files (PDF/text).
-- **Skills:** `ai-sdk`, `security-and-hardening` (install), `frontend-ui-engineering`.
-- **Read first:** AI SDK: tool calling (revisit), multimodal/file attachments, provider search tools. The `security-and-hardening` skill's guidance on input validation and user-supplied URLs.
-- **Done when:** a link from a site with embedded recipe data produces the same card. An unreachable or non-recipe page gives a clear message. Only http(s) URLs are accepted, and requests to local or private addresses are refused. Web search answers a live cooking query. Uploading an image or file in chat works and the model reads its contents. The site-terms question in DECISIONS.md is resolved or consciously accepted.
-- **You can explain:** why the model can't just "read" a URL without a tool. Why fetching user-supplied URLs is risky and which check guards it. How web search grounding differs from fetching a single URL. How multimodal file/image parts are sent to the model.
+### [x] Step 4: Link import, web search, and file/image uploads — Done (SSRF-safe URL import with JSON-LD/notes/YouTube extraction in `lib/recipes/url-import.ts`, optional `notes` in `lib/recipes/schema.ts`, Tavily `searchWeb` tool in `lib/ai/web-search.ts`, multimodal upload resizing & server MIME validation in `lib/files/` & `app/api/chat/route.ts`, source footers & `RecipeNotesCollapsible` in UI).
 
 ### [ ] Step 5a: Supabase and saved chats
 - **Build:** a Supabase project, tables for chats and messages, a sidebar of past chats, and a `/chat/[id]` route with loading and error states.
@@ -89,6 +84,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ## 7. Changes log
 
+- 2026-11-15: Completed Step 4 (link import with SSRF guards, recipe notes & YouTube video extraction; switched web search from Google Search Grounding to Tavily due to 0 free-tier quota; client-side image resize and server attachment validation).
 - 2026-11-11: Completed Step 3 (Structured recipe schema, output validation with Vitest tests, two-step tool flow with compact match previews, full `<RecipeCard />` with dynamic attribution and photo modal lightbox, component separation and `lib/ai/types.ts`).
 
 - 2026-11-09: Completed Step 2 (TheMealDB recipe search with normalizer and fallbacks, AI SDK tool calling, 3-step streaming route, grounded prompt, status pill, and per-message attribution).

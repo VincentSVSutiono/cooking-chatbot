@@ -30,6 +30,7 @@ export const RecipeSchema = z.object({
   steps: z.array(NonEmptyString).min(1),
   times: RecipeTimesSchema,
   safetyNote: NonEmptyString.nullable(),
+  notes: z.array(NonEmptyString).optional(),
   source: RecipeSourceSchema,
 });
 

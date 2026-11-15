@@ -18,7 +18,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
   - **Edamam:** the free plan caches only the recipe ID and name, and its recipes link out without cooking instructions. **[verified]**
   - **RecipeNLG:** its card says non-commercial research and education only, and part of it is scraped. Another catalog lists "no known license". **[verified]**
   - Kaggle datasets: **[unverified]**, not checked.
-- **Link import (step 4):** many recipe sites embed machine-readable recipe data, but site terms and bot-blocking vary. **[unverified]** Check terms before relying on a site.
+- **Link import (step 4):** many recipe sites embed JSON-LD `Recipe` data, and site terms/bot-blocking vary. Personal-use on-demand fetch only: respects HTTP `402`/`403` blocks without bypassing, keeps visible source link & attribution, never crawls or republishes. **[verified, step 4]**
 
 ## 2. Database: Supabase (Postgres + pgvector)
 
@@ -104,11 +104,11 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - [ ] Email TheMealDB about a personal-only deployment _(user, before step 7)_
 - [x] TheMealDB free-key real limits and recipe count (790 unique recipes across a–z, 0 rate limit on 26 rapid requests) _(step 2)_
 - [x] Test tool calling compatibility on chosen Gemini models (reliable tool calling & strict grounding) _(step 2)_
-- [ ] Test search grounding compatibility on chosen Gemini models _(step 4)_
+- [x] Test search grounding compatibility on chosen Gemini models (verified `googleSearch` has 0 free-tier quota on Google AI Studio -> HTTP 429; replaced with Tavily `searchWeb` at 1,000 free credits/month) _(step 4)_
 - [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed _(step 1)_
 - [ ] Pick the embedding model _(step 5b)_
 - [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
-- [ ] Link import: site terms _(step 4)_
+- [x] Link import: site terms (consciously accepted for personal use: respect `402`/`403`, keep visible attribution, no crawling/redistribution) _(step 4)_
 - [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication _(step 7)_
 - [x] Skills install into `.agents/skills/` and both CLIs list them
 - [x] Versions checked: OpenCode 2.0.32, AGY 1.3.6, Node v22.23.1, git 2.56.0
@@ -121,6 +121,8 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 ## 7. Decision log
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
+
+- 2026-11-15: Replaced `google.tools.googleSearch` with provider-agnostic Tavily `searchWeb` tool (`basic` depth, `max_results: 5`, 600-char snippets) and added `security-and-hardening` SSRF guards + YouTube/notes extraction to `importRecipeFromUrl`. Reason: Google AI Studio free tier gives 0 quota for search grounding (`429 RESOURCE_EXHAUSTED`), while Tavily provides 1,000 free credits/month across all models. Source: ai.google.dev/gemini-api/docs/pricing, `lib/ai/web-search.ts`, `lib/recipes/url-import.ts`.
 
 - 2026-11-11: Adopted Vitest for test runner, AI SDK `Output.object` with Zod v4 for recipe structuring, and isolated AI types in `lib/ai/types.ts`. Reason: fast ESM testing for schema/normalizers, guaranteed valid recipe data, and clean architecture without coupling UI components to tool output types. Source: `lib/recipes/schema.ts`, `lib/recipes/__tests__/`, `lib/ai/types.ts`.
 - 2026-11-11: Implemented two-step recipe flow (`searchDishByName` compact previews -> `showRecipeCard` full card) with dynamic attribution and photo modal lightbox. Reason: compact search saves LLM token budget and avoids chat clutter; dynamic `recipe.source` attribution prevents hardcoding TheMealDB for future external recipes (Steps 4 & 5). Source: `lib/ai/tools.ts`, `components/recipes/RecipeCard.tsx`.

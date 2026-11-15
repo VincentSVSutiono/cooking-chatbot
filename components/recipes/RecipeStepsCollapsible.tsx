@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { FormattedRecipeStep } from "./RecipeFormattedText";
+import RecipeExpandButton from "./RecipeExpandButton";
 
 export interface RecipeStepsCollapsibleProps {
   steps: string[];
@@ -32,37 +33,30 @@ export default function RecipeStepsCollapsible({
     <div className="space-y-3">
       <ol className="space-y-3">
         {visibleSteps.map((step, index) => (
-          <li key={index} className="flex items-start gap-3 text-base text-text">
+          <li
+            key={index}
+            className="flex items-start gap-3 rounded-xl border border-border/80 bg-background/70 p-3.5 sm:p-4 text-[15px] sm:text-base text-text"
+          >
             <span
               aria-hidden="true"
-              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-accent-strong"
+              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-xs sm:text-sm font-bold text-accent-strong"
             >
               {index + 1}
             </span>
-            <span className="flex-1 leading-relaxed break-words">{step}</span>
+            <span className="min-w-0 flex-1 leading-relaxed break-words">
+              <FormattedRecipeStep text={step} />
+            </span>
           </li>
         ))}
       </ol>
 
       {shouldCollapse && (
-        <button
-          type="button"
-          onClick={() => setIsExpanded((prev) => !prev)}
-          aria-expanded={isExpanded}
-          className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-user-message focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp className="h-4 w-4 text-accent-strong" aria-hidden="true" />
-              <span>Show fewer steps</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-4 w-4 text-accent-strong" aria-hidden="true" />
-              <span>Show all {steps.length} steps ({steps.length - initialVisibleCount} more)</span>
-            </>
-          )}
-        </button>
+        <RecipeExpandButton
+          isExpanded={isExpanded}
+          onToggle={() => setIsExpanded((prev) => !prev)}
+          expandedLabel="Show fewer steps"
+          collapsedLabel={`Show all ${steps.length} steps (${steps.length - initialVisibleCount} more)`}
+        />
       )}
     </div>
   );

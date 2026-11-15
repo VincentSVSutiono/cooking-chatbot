@@ -136,4 +136,23 @@ describe("validateRecipe", () => {
     expect(validateRecipe(badUrl).success).toBe(false);
     expect(validateRecipe(emptyCredit).success).toBe(false);
   });
+
+  it("accepts optional recipe notes and rejects empty or whitespace-only note entries", () => {
+    const withNotes = createValidRecipe({
+      notes: [
+        "1b. Onion: Use a brown, white or yellow onion about the size of a tennis ball.",
+        "3. Galangal can be substituted with extra ginger and black pepper.",
+      ],
+    });
+    const validResult = validateRecipe(withNotes);
+    expect(validResult.success).toBe(true);
+    if (validResult.success) {
+      expect(validResult.data.notes).toHaveLength(2);
+    }
+
+    const emptyNote = createValidRecipe({
+      notes: ["Valid note", "   "],
+    });
+    expect(validateRecipe(emptyNote).success).toBe(false);
+  });
 });
