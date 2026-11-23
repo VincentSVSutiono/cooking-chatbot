@@ -1,33 +1,29 @@
 import { ExternalLink } from "lucide-react";
-import type { NormalizedRecipe, DishSearchResult } from "@/lib/recipes/search";
-import type { UIMessage } from "ai";
+import {
+  THEMEALDB_URL,
+  type NormalizedMealDbRecipe,
+} from "@/lib/recipes/mealdb";
+import type { ChatMessage } from "@/lib/ai/tools";
 
-export interface RecipeAttributionProps {
-  recipes: NormalizedRecipe[];
+interface RecipeAttributionProps {
+  recipes: NormalizedMealDbRecipe[];
 }
 
 /**
- * Extracts all matched recipes from any tool-searchDishByName parts in an assistant message.
+ * Extracts all matched recipes from any tool-searchRecipes parts in an assistant message.
  */
 export function getMatchedRecipesFromMessage(
-  message: UIMessage,
-): NormalizedRecipe[] {
-  const recipes: NormalizedRecipe[] = [];
+  message: ChatMessage,
+): NormalizedMealDbRecipe[] {
+  const recipes: NormalizedMealDbRecipe[] = [];
 
   for (const part of message.parts) {
-    if (part.type === "tool-searchDishByName") {
-      const toolPart = part as {
-        state?: string;
-        output?: DishSearchResult;
-      };
-
-      if (
-        toolPart.state === "output-available" &&
-        toolPart.output?.found &&
-        Array.isArray(toolPart.output.recipes)
-      ) {
-        recipes.push(...toolPart.output.recipes);
-      }
+    if (
+      part.type === "tool-searchRecipes" &&
+      part.state === "output-available" &&
+      part.output.found
+    ) {
+      recipes.push(...part.output.recipes);
     }
   }
 
@@ -45,7 +41,7 @@ export default function RecipeAttribution({ recipes }: RecipeAttributionProps) {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span>Recipe data and imagery:</span>
         <a
-          href="https://www.themealdb.com/"
+          href={THEMEALDB_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 font-medium text-accent-strong hover:underline focus-visible:outline-accent-strong"
@@ -60,12 +56,12 @@ export default function RecipeAttribution({ recipes }: RecipeAttributionProps) {
         {recipes.map((recipe) => (
           <a
             key={recipe.id}
-            href={recipe.mealUrl}
+            href={recipe.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-accent-strong hover:underline focus-visible:outline-accent-strong"
           >
-            {recipe.name}
+            {recipe.title}
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
           </a>
         ))}

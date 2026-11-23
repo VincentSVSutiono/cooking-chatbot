@@ -1,4 +1,8 @@
-export const STARTER_PROMPTS_POOL = [
+"use client";
+
+import { useState } from "react";
+
+const STARTER_PROMPTS_POOL = [
   "What is an easy, 20-minute dinner recipe for a complete beginner?",
   "How do I dice an onion safely without crying?",
   "What are some of the most essential cooking tools a total beginner actually needs?",
@@ -10,22 +14,28 @@ export const STARTER_PROMPTS_POOL = [
   "What is the difference between sautéing and pan-frying?",
 ];
 
-export function pickRandomPrompts(pool: string[], count = 3): string[] {
+function pickRandomPrompts(pool: string[], count = 3): string[] {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
 
-export interface ChatWelcomeScreenProps {
-  prompts: string[];
+interface ChatWelcomeScreenProps {
   onSelectPrompt: (promptText: string) => void;
   disabled?: boolean;
+  shuffleOnMount?: boolean;
 }
 
 export default function ChatWelcomeScreen({
-  prompts,
   onSelectPrompt,
   disabled = false,
+  shuffleOnMount = false,
 }: ChatWelcomeScreenProps) {
+  const [prompts] = useState<string[]>(() =>
+    shuffleOnMount
+      ? pickRandomPrompts(STARTER_PROMPTS_POOL, 3)
+      : STARTER_PROMPTS_POOL.slice(0, 3),
+  );
+
   return (
     <section
       aria-labelledby="welcome-heading"

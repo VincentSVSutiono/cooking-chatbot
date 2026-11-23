@@ -1,7 +1,6 @@
 import {
-  splitIngredientSegments,
-  splitRecipeNotePrefix,
-  splitStepSegments,
+  splitRecipeNote,
+  splitRecipeNoteRefs,
   type RecipeTextSegment,
 } from "@/lib/recipes/format-text";
 
@@ -18,7 +17,7 @@ function SegmentList({ segments, mainClassName }: SegmentListProps) {
           return (
             <span
               key={`note-ref-${index}`}
-              className="font-semibold text-accent-strong  decoration-accent-strong/40 "
+              className="font-semibold text-accent-strong"
             >
               {segment.raw}
             </span>
@@ -36,25 +35,25 @@ function SegmentList({ segments, mainClassName }: SegmentListProps) {
 }
 
 /**
- * Formats an ingredient item so the main ingredient stands out while
- * parenthetical clarifications and `(Note ...)` references stay distinct.
+ * Formats an ingredient item so `(Note ...)` references stand out while keeping
+ * the rest of the ingredient text uniform.
  */
-export function FormattedIngredientText({ text }: { text: string }) {
+export function FormattedRecipeIngredient({ text }: { text: string }) {
   return (
     <SegmentList
-      segments={splitIngredientSegments(text)}
+      segments={splitRecipeNoteRefs(text)}
       mainClassName="font-medium text-text"
     />
   );
 }
 
 /**
- * Formats a cooking step so the main instruction remains crisp while longer
- * parenthetical cooking cues and note references are visually distinct.
+ * Formats a cooking step so `(Note ...)` references stand out while keeping
+ * instructions and parenthetical cues in the same text style.
  */
 export function FormattedRecipeStep({ text }: { text: string }) {
   return (
-    <SegmentList segments={splitStepSegments(text)} mainClassName="text-text" />
+    <SegmentList segments={splitRecipeNoteRefs(text)} mainClassName="text-text" />
   );
 }
 
@@ -62,8 +61,8 @@ export function FormattedRecipeStep({ text }: { text: string }) {
  * Formats a recipe note by emphasizing its leading label (e.g. `Note 1b - Onions:`)
  * before the explanation body.
  */
-export function FormattedRecipeNote({ note }: { note: string }) {
-  const { prefix, body } = splitRecipeNotePrefix(note);
+export function FormattedRecipeNote({ text }: { text: string }) {
+  const { prefix, body } = splitRecipeNote(text);
 
   if (!prefix) {
     return <span className="text-text">{body}</span>;

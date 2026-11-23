@@ -2,21 +2,43 @@ import "server-only";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { getChatModel } from "@/config/ai";
-import type { NormalizedRecipe } from "./search";
-import type { ExtractedWebRecipeCandidate } from "./url-import";
+import { THEMEALDB_CREDIT_TEXT, type NormalizedMealDbRecipe } from "./mealdb";
+import type { ExtractedUrlRecipe } from "./url-import";
 import {
   validateRecipe,
   RecipeIngredientSchema,
-  type RecipeValidationResult,
   type StructuredRecipe,
 } from "./schema";
 
-export const THEMEALDB_CREDIT_TEXT =
-  "Recipe data and imagery: TheMealDB (https://www.themealdb.com/)";
+export type GetRecipeOutput =
+  | { status: "success"; recipe: StructuredRecipe }
+  | {
+      status: "validation-error";
+      id: string;
+      title?: string;
+      message: string;
+    }
+  | {
+      status: "not-found";
+      id: string;
+      title?: string;
+      message: string;
+    };
+
+export type ImportUrlRecipeOutput =
+  | { status: "success"; recipe: StructuredRecipe }
+  | { status: "not-a-recipe"; url: string; title?: string; message: string }
+  | { status: "fetch-error"; url: string; title?: string; message: string }
+  | {
+      status: "validation-error";
+      url: string;
+      title?: string;
+      message: string;
+    };
 
 const NonEmptyString = z.string().trim().min(1);
 
-export const InstructionBreakdownSchema = z.object({
+export const MealDbRecipeBreakdownSchema = z.object({
   steps: z
     .array(NonEmptyString)
     .min(1)
@@ -41,49 +63,61 @@ export const InstructionBreakdownSchema = z.object({
   ),
 });
 
-export async function structureNormalizedRecipe(
-  rawRecipe: NormalizedRecipe,
+export async function structureMealDbRecipe(
+  normalizedRecipe: NormalizedMealDbRecipe,
   modelId?: string,
-): Promise<RecipeValidationResult> {
+): Promise<GetRecipeOutput> {
   try {
-    const prompt = `Convert the following raw recipe instructions for "${rawRecipe.name}" into beginner-friendly steps, times, and safetyNote.
+    const prompt = `Convert the following raw recipe instructions for "${normalizedRecipe.title}" into beginner-friendly steps, times, and safetyNote.
 Strictly follow the source text and never invent times, temperatures, or amounts.
 Raw instructions:
-${rawRecipe.instructions}`;
+${normalizedRecipe.instructions}`;
 
     const { output } = await generateText({
       model: getChatModel(modelId),
-      output: Output.object({ schema: InstructionBreakdownSchema }),
+      output: Output.object({ schema: MealDbRecipeBreakdownSchema }),
       prompt,
     });
 
     const candidateRecipe = {
-      id: rawRecipe.id,
-      title: rawRecipe.name,
-      ingredients: rawRecipe.ingredients.map((ing) => ({
-        item: ing.item,
-        amount: ing.measure,
-      })),
+      id: normalizedRecipe.id,
+      title: normalizedRecipe.title,
+      ingredients: normalizedRecipe.ingredients,
       steps: output.steps,
       times: output.times,
       safetyNote: output.safetyNote,
       source: {
         name: "TheMealDB",
-        url: rawRecipe.mealUrl,
+        url: normalizedRecipe.sourceUrl,
         creditText: THEMEALDB_CREDIT_TEXT,
-        thumbnailUrl: rawRecipe.thumbnailUrl,
-        youtubeUrl: rawRecipe.youtubeUrl,
-        category: rawRecipe.category,
-        area: rawRecipe.area,
+        thumbnailUrl: normalizedRecipe.thumbnailUrl,
+        youtubeUrl: normalizedRecipe.youtubeUrl,
+        category: normalizedRecipe.category,
+        area: normalizedRecipe.area,
       },
     };
 
-    return validateRecipe(candidateRecipe);
-  } catch (error) {
-    console.error("Failed to structure recipe:", error);
+    const validation = validateRecipe(candidateRecipe);
+    if (!validation.success) {
+      return {
+        status: "validation-error",
+        id: normalizedRecipe.id,
+        title: normalizedRecipe.title,
+        message: validation.error,
+      };
+    }
+
     return {
-      success: false,
-      error:
+      status: "success",
+      recipe: validation.data,
+    };
+  } catch (error) {
+    console.error("Failed to structure MealDB recipe:", error);
+    return {
+      status: "validation-error",
+      id: normalizedRecipe.id,
+      title: normalizedRecipe.title,
+      message:
         error instanceof Error
           ? error.message
           : "Failed to generate structured recipe output.",
@@ -91,7 +125,7 @@ ${rawRecipe.instructions}`;
   }
 }
 
-export const ImportedRecipeBreakdownSchema = z.object({
+export const UrlRecipeBreakdownSchema = z.object({
   isRecipe: z
     .boolean()
     .describe(
@@ -112,8 +146,8 @@ export const ImportedRecipeBreakdownSchema = z.object({
         "When a cooking term appears (e.g. simmer, sauté, fold, al dente), briefly explain what it looks or sounds like in parentheses. " +
         "Do NOT invent any ingredients, quantities, cooking times, or temperatures not stated in the source. Empty array if isRecipe is false.",
     ),
-  times: InstructionBreakdownSchema.shape.times,
-  safetyNote: InstructionBreakdownSchema.shape.safetyNote,
+  times: MealDbRecipeBreakdownSchema.shape.times,
+  safetyNote: MealDbRecipeBreakdownSchema.shape.safetyNote,
   notes: z
     .array(NonEmptyString)
     .describe(
@@ -122,80 +156,86 @@ export const ImportedRecipeBreakdownSchema = z.object({
     ),
 });
 
-export type StructureImportedRecipeResult =
-  | { status: "success"; recipe: StructuredRecipe }
-  | { status: "not-a-recipe"; message: string }
-  | { status: "validation-error"; message: string };
-
-export async function structureImportedRecipe(
-  candidate: ExtractedWebRecipeCandidate,
+export async function structureUrlRecipe(
+  extractedRecipe: ExtractedUrlRecipe,
   modelId?: string,
-): Promise<StructureImportedRecipeResult> {
+): Promise<ImportUrlRecipeOutput> {
   try {
-    const notesBlock =
-      candidate.mode === "json-ld" && candidate.notesText
-        ? `\nRecipe Notes:\n${candidate.notesText}`
-        : "";
-    const sourceContent =
-      candidate.mode === "json-ld"
-        ? `Mode: Structured JSON-LD Recipe
-Title: ${candidate.title}
+    const sharedRules = [
+      "Keep every recipe note or substitution referenced by ingredients/steps (e.g. Note 1, Note 1b) in the notes array without inventing details.",
+      "Strictly follow the source text and never invent ingredients, amounts, cooking times, or temperatures.",
+    ].join("\n");
+
+    const prompt =
+      extractedRecipe.mode === "json-ld"
+        ? `Format this pre-extracted recipe data (already confirmed to be a recipe) into beginner-friendly steps, split { item, amount } ingredients, notes, times, and safetyNote.
+Set isRecipe to true unless the data is clearly missing ingredients or instructions.
+${sharedRules}
+
+Title: ${extractedRecipe.title}
 Ingredients:
-${candidate.ingredients.map((i) => `- ${i}`).join("\n")}
+${extractedRecipe.ingredients.map((i) => `- ${i}`).join("\n")}
 Raw Instructions:
-${candidate.rawInstructions}${notesBlock}`
-        : `Mode: Webpage Text
-Page Title: ${candidate.title}
+${extractedRecipe.instructions}${extractedRecipe.notesText ? `\nRecipe Notes:\n${extractedRecipe.notesText}` : ""}`
+        : `Extract and structure a recipe from the following webpage text into title, ingredients, beginner-friendly steps, notes, times, and safetyNote.
+If the page does not contain a real recipe with both ingredients and instructions, set isRecipe to false.
+${sharedRules}
+
+Page Title: ${extractedRecipe.title}
 Page Content:
-${candidate.textSnippet}`;
+${extractedRecipe.textSnippet}`;
 
     const { output } = await generateText({
       model: getChatModel(modelId),
-      output: Output.object({ schema: ImportedRecipeBreakdownSchema }),
-      prompt: `Extract and structure the recipe from this webpage into beginner-friendly steps, ingredients, notes, times, and safetyNote.
-If the page does not contain a real recipe with both ingredients and instructions, set isRecipe to false.
-Keep any recipe notes or substitutions referenced by ingredients/steps (e.g. Note 1, Note 1b) in the notes array without inventing details.
-Strictly follow the source text and never invent ingredients, amounts, cooking times, or temperatures.
-
-${sourceContent}`,
+      output: Output.object({ schema: UrlRecipeBreakdownSchema }),
+      prompt,
     });
 
     if (!output.isRecipe || !output.title) {
       return {
         status: "not-a-recipe",
-        message: `The page at ${candidate.siteName} does not appear to contain a complete recipe with ingredients and instructions.`,
+        url: extractedRecipe.sourceUrl,
+        title: extractedRecipe.title,
+        message: `The page at ${extractedRecipe.siteName} does not appear to contain a complete recipe with ingredients and instructions.`,
       };
     }
 
     const candidateRecipe = {
-      id: `url-${encodeURIComponent(candidate.pageUrl).slice(0, 64)}`,
-      title: candidate.mode === "json-ld" ? candidate.title : output.title,
+      id: `url-${encodeURIComponent(extractedRecipe.sourceUrl).slice(0, 64)}`,
+      title:
+        extractedRecipe.mode === "json-ld"
+          ? extractedRecipe.title
+          : output.title,
       ingredients: output.ingredients,
       steps: output.steps,
       times: {
         prep:
-          candidate.mode === "json-ld"
-            ? (candidate.prepTime ?? output.times.prep)
+          extractedRecipe.mode === "json-ld"
+            ? (extractedRecipe.prepTime ?? output.times.prep)
             : output.times.prep,
         cook:
-          candidate.mode === "json-ld"
-            ? (candidate.cookTime ?? output.times.cook)
+          extractedRecipe.mode === "json-ld"
+            ? (extractedRecipe.cookTime ?? output.times.cook)
             : output.times.cook,
         total:
-          candidate.mode === "json-ld"
-            ? (candidate.totalTime ?? output.times.total)
+          extractedRecipe.mode === "json-ld"
+            ? (extractedRecipe.totalTime ?? output.times.total)
             : output.times.total,
       },
       safetyNote: output.safetyNote,
       ...(output.notes.length > 0 ? { notes: output.notes } : {}),
       source: {
-        name: candidate.siteName,
-        url: candidate.pageUrl,
-        creditText: `Recipe imported from ${candidate.siteName} (${candidate.pageUrl})`,
-        thumbnailUrl: candidate.mode === "json-ld" ? candidate.imageUrl : null,
-        youtubeUrl: candidate.youtubeUrl,
-        category: candidate.mode === "json-ld" ? candidate.category : null,
-        area: candidate.mode === "json-ld" ? candidate.area : null,
+        name: extractedRecipe.siteName,
+        url: extractedRecipe.sourceUrl,
+        creditText: `Recipe imported from ${extractedRecipe.siteName} (${extractedRecipe.sourceUrl})`,
+        thumbnailUrl:
+          extractedRecipe.mode === "json-ld"
+            ? extractedRecipe.thumbnailUrl
+            : null,
+        youtubeUrl: extractedRecipe.youtubeUrl,
+        category:
+          extractedRecipe.mode === "json-ld" ? extractedRecipe.category : null,
+        area: extractedRecipe.mode === "json-ld" ? extractedRecipe.area : null,
       },
     };
 
@@ -203,6 +243,8 @@ ${sourceContent}`,
     if (!validation.success) {
       return {
         status: "validation-error",
+        url: extractedRecipe.sourceUrl,
+        title: extractedRecipe.title,
         message: validation.error,
       };
     }
@@ -212,13 +254,15 @@ ${sourceContent}`,
       recipe: validation.data,
     };
   } catch (error) {
-    console.error("Failed to structure imported recipe:", error);
+    console.error("Failed to structure URL recipe:", error);
     return {
       status: "validation-error",
+      url: extractedRecipe.sourceUrl,
+      title: extractedRecipe.title,
       message:
         error instanceof Error
           ? error.message
-          : "Failed to structure imported recipe.",
+          : "Failed to structure imported URL recipe.",
     };
   }
 }

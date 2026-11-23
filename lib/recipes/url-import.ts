@@ -8,22 +8,22 @@ export type DnsLookupFn = (
 const defaultDnsLookup: DnsLookupFn = (hostname) =>
   dnsLookup(hostname, { all: true });
 
-export type ExtractedWebRecipeCandidate =
+export type ExtractedUrlRecipe =
   | {
       mode: "json-ld";
       title: string;
       ingredients: string[];
-      rawInstructions: string;
+      instructions: string;
       notesText: string | null;
       prepTime: string | null;
       cookTime: string | null;
       totalTime: string | null;
-      imageUrl: string | null;
+      thumbnailUrl: string | null;
       youtubeUrl: string | null;
       category: string | null;
       area: string | null;
       siteName: string;
-      pageUrl: string;
+      sourceUrl: string;
     }
   | {
       mode: "page-text";
@@ -31,7 +31,7 @@ export type ExtractedWebRecipeCandidate =
       textSnippet: string;
       youtubeUrl: string | null;
       siteName: string;
-      pageUrl: string;
+      sourceUrl: string;
     };
 
 export function isPrivateOrReservedIp(rawIp: string): boolean {
@@ -133,14 +133,14 @@ export async function assertSafeRecipeUrl(
   return url;
 }
 
-export interface FetchSafeRecipeHtmlOptions {
+export interface FetchSafeUrlHtmlOptions {
   lookupFn?: DnsLookupFn;
   fetchFn?: typeof fetch;
 }
 
-export async function fetchSafeRecipeHtml(
+export async function fetchSafeUrlHtml(
   rawUrl: string,
-  options: FetchSafeRecipeHtmlOptions = {},
+  options: FetchSafeUrlHtmlOptions = {},
 ): Promise<{ html: string; finalUrl: string }> {
   const { lookupFn = defaultDnsLookup, fetchFn = fetch } = options;
   let currentUrl = await assertSafeRecipeUrl(rawUrl, lookupFn);
@@ -202,6 +202,39 @@ export async function fetchSafeRecipeHtml(
   }
 
   throw new Error("Too many redirects (max 3).");
+}
+
+export function isTransientFetchFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "TimeoutError" || error.name === "AbortError") return true;
+  if (error.name === "TypeError") return true;
+
+  const msg = error.message;
+  return (
+    /timeout|timed out|aborted|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|socket/i.test(
+      msg,
+    ) || /^Failed to fetch page: HTTP 5\d\d\b/.test(msg)
+  );
+}
+
+export function formatFetchErrorMessage(error: unknown, rawUrl: string): string {
+  const isTimeout =
+    error instanceof Error &&
+    (error.name === "TimeoutError" ||
+      error.name === "AbortError" ||
+      /timeout|timed out|aborted/i.test(error.message));
+
+  if (isTimeout) {
+    let host = rawUrl;
+    try {
+      host = new URL(rawUrl).hostname.replace(/^www\./i, "") || rawUrl;
+    } catch {
+      // keep rawUrl fallback
+    }
+    return `Timed out waiting for ${host} to respond. You can open the page directly or try another link.`;
+  }
+
+  return error instanceof Error ? error.message : "Could not fetch that URL.";
 }
 
 function formatIsoDuration(iso: unknown): string | null {
@@ -545,10 +578,10 @@ export function extractRecipeNotesFromHtml(html: string): string | null {
   return null;
 }
 
-export function extractRecipeFromHtml(
+export function extractUrlRecipe(
   html: string,
   pageUrl: string,
-): ExtractedWebRecipeCandidate {
+): ExtractedUrlRecipe {
   const siteName = getSiteNameFromUrl(pageUrl);
   const scriptRegex =
     /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -581,28 +614,28 @@ export function extractRecipeFromHtml(
         )
         .map((item) => decodeHtmlEntities(item.trim()));
 
-      const rawInstructions = extractInstructionsText(
+      const instructions = extractInstructionsText(
         recipeNode.recipeInstructions,
       );
 
-      if (ingredients.length > 0 && rawInstructions.length > 0) {
+      if (ingredients.length > 0 && instructions.length > 0) {
         return {
           mode: "json-ld",
           title,
           ingredients,
-          rawInstructions,
+          instructions,
           notesText: extractRecipeNotesFromHtml(html),
           prepTime: formatIsoDuration(recipeNode.prepTime),
           cookTime: formatIsoDuration(recipeNode.cookTime),
           totalTime: formatIsoDuration(recipeNode.totalTime),
-          imageUrl: extractImageUrl(recipeNode.image, pageUrl),
+          thumbnailUrl: extractImageUrl(recipeNode.image, pageUrl),
           youtubeUrl:
             extractYouTubeFromJsonLd(recipeNode.video, pageUrl) ??
             extractYouTubeUrlFromHtml(html, pageUrl),
           category: extractFirstString(recipeNode.recipeCategory),
           area: extractFirstString(recipeNode.recipeCuisine),
           siteName,
-          pageUrl,
+          sourceUrl: pageUrl,
         };
       }
     } catch {
@@ -625,6 +658,6 @@ export function extractRecipeFromHtml(
     textSnippet: cleanedText,
     youtubeUrl: extractYouTubeUrlFromHtml(html, pageUrl),
     siteName,
-    pageUrl,
+    sourceUrl: pageUrl,
   };
 }

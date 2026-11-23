@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  splitIngredientSegments,
-  splitStepSegments,
-  splitRecipeNotePrefix,
-} from "../format-text";
+import { splitRecipeNote, splitRecipeNoteRefs } from "../format-text";
 
-describe("splitIngredientSegments", () => {
+describe("splitRecipeNoteRefs", () => {
   it("extracts note references like (Note 1b) as noteRef segments while keeping surrounding text", () => {
-    const segments = splitIngredientSegments(
+    const segments = splitRecipeNoteRefs(
       "small onion, finely chopped (Note 1b)",
     );
 
@@ -17,50 +13,36 @@ describe("splitIngredientSegments", () => {
     ]);
   });
 
-  it("extracts parenthetical clarifications as paren segments and preserves exact text", () => {
-    const input = "large kaffir lime leaves (or 6 small), very thinly sliced";
-    const segments = splitIngredientSegments(input);
+  it("keeps other parenthetical clarifications merged into plain text", () => {
+    const input =
+      "Simmer gently (tiny bubbles breaking slowly) for 15 minutes (2 tbsp left) (Note 2).";
+    const segments = splitRecipeNoteRefs(input);
 
     expect(segments).toEqual([
-      { kind: "text", value: "large kaffir lime leaves " },
-      { kind: "paren", value: "(or 6 small)" },
-      { kind: "text", value: ", very thinly sliced" },
+      {
+        kind: "text",
+        value:
+          "Simmer gently (tiny bubbles breaking slowly) for 15 minutes (2 tbsp left) ",
+      },
+      { kind: "noteRef", value: "Note 2", raw: "(Note 2)" },
+      { kind: "text", value: "." },
     ]);
     expect(
       segments.map((s) => ("raw" in s ? s.raw : s.value)).join(""),
     ).toBe(input);
   });
 
-  it("returns a single text segment when there are no parentheticals", () => {
-    expect(splitIngredientSegments("garlic, minced")).toEqual([
-      { kind: "text", value: "garlic, minced" },
+  it("returns a single text segment when there are no note references", () => {
+    expect(splitRecipeNoteRefs("garlic, minced (or crushed)")).toEqual([
+      { kind: "text", value: "garlic, minced (or crushed)" },
     ]);
   });
 });
 
-describe("splitStepSegments", () => {
-  it("separates explanatory cues in parentheses from core action text and keeps unit conversions normal", () => {
-    const input =
-      "Simmer gently (tiny bubbles breaking slowly around the edges) for 15 minutes (2 tbsp liquid left) (Note 2).";
-    const segments = splitStepSegments(input);
-
-    expect(segments).toEqual([
-      { kind: "text", value: "Simmer gently " },
-      {
-        kind: "paren",
-        value: "(tiny bubbles breaking slowly around the edges)",
-      },
-      { kind: "text", value: " for 15 minutes (2 tbsp liquid left) " },
-      { kind: "noteRef", value: "Note 2", raw: "(Note 2)" },
-      { kind: "text", value: "." },
-    ]);
-  });
-});
-
-describe("splitRecipeNotePrefix", () => {
+describe("splitRecipeNote", () => {
   it("extracts explicit Note labels with optional sub-titles", () => {
     expect(
-      splitRecipeNotePrefix(
+      splitRecipeNote(
         "Note 1b - Onions: Use yellow or brown onions for sweetness.",
       ),
     ).toEqual({
@@ -69,7 +51,7 @@ describe("splitRecipeNotePrefix", () => {
     });
 
     expect(
-      splitRecipeNotePrefix("Note 3 (Coconut): Desiccated works best."),
+      splitRecipeNote("Note 3 (Coconut): Desiccated works best."),
     ).toEqual({
       prefix: "Note 3 (Coconut):",
       body: "Desiccated works best.",
@@ -78,14 +60,14 @@ describe("splitRecipeNotePrefix", () => {
 
   it("extracts short labeled headings and numbered prefixes", () => {
     expect(
-      splitRecipeNotePrefix("Storage: Keeps in the fridge for 4 days."),
+      splitRecipeNote("Storage: Keeps in the fridge for 4 days."),
     ).toEqual({
       prefix: "Storage:",
       body: "Keeps in the fridge for 4 days.",
     });
 
     expect(
-      splitRecipeNotePrefix("2. Toast the coconut gently until golden."),
+      splitRecipeNote("2. Toast the coconut gently until golden."),
     ).toEqual({
       prefix: "2.",
       body: "Toast the coconut gently until golden.",
@@ -95,7 +77,7 @@ describe("splitRecipeNotePrefix", () => {
   it("returns null prefix for unlabeled plain sentences", () => {
     const plain =
       "If the curry sticks slightly, turn down the heat and stir well.";
-    expect(splitRecipeNotePrefix(plain)).toEqual({
+    expect(splitRecipeNote(plain)).toEqual({
       prefix: null,
       body: plain,
     });

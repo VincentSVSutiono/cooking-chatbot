@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FormattedRecipeNote } from "./RecipeFormattedText";
 import RecipeExpandButton from "./RecipeExpandButton";
 
-export interface RecipeNotesCollapsibleProps {
+interface RecipeNotesCollapsibleProps {
   notes: string[];
 }
 
@@ -39,7 +39,7 @@ export default function RecipeNotesCollapsible({
               key={`note-${index}`}
               className="rounded-xl border border-border/80 bg-background px-3.5 py-3 text-[15px] sm:text-base leading-relaxed text-text break-words"
             >
-              <FormattedRecipeNote note={note} />
+              <FormattedRecipeNote text={note} />
             </li>
           ))}
         </ul>

@@ -7,6 +7,8 @@ export const RecipeIngredientSchema = z.object({
   amount: z.string().trim(),
 });
 
+export type RecipeIngredient = z.infer<typeof RecipeIngredientSchema>;
+
 export const RecipeTimesSchema = z.object({
   prep: NonEmptyString.nullable(),
   cook: NonEmptyString.nullable(),

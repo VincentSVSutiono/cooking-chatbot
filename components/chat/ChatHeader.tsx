@@ -1,6 +1,6 @@
 import { UtensilsCrossed, Plus } from "lucide-react";
 
-export interface ChatHeaderProps {
+interface ChatHeaderProps {
   onNewChat: () => void;
   canNewChat: boolean;
 }

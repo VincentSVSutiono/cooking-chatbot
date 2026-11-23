@@ -15,6 +15,7 @@ Project: Beginner Cooking Companion, a cooking-only AI chatbot. **The primary go
 - `docs/PRD.md`: what to build, the current step, progress.
 - `docs/DECISIONS.md`: read before touching data sources, models or providers, the database, deployment, or free-tier limits.
 - `docs/DESIGN.md`: colors, type and icons. Read before building or changing UI.
+- `docs/ARCHITECTURE.md`: folder structure, module boundaries, and naming conventions. Read before adding or refactoring files, types, tools, or components.
 
 ## Learning mode (highest priority)
 
@@ -48,8 +49,7 @@ Next.js (App Router), TypeScript, Tailwind, Vercel AI SDK, Supabase (Postgres + 
 ## Commands
 
 Use npm scripts, not OS-specific commands:
-`npm run dev`, `npm run build`, `npm run lint`, `npm run typecheck`
-`npm test` doesn't exist yet. It's added in Step 3 with the first tests.
+`npm run dev`, `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`
 
 ## Conventions
 

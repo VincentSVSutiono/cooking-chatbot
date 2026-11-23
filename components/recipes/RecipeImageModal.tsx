@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { X, ZoomIn } from "lucide-react";
+import { ImageOff, Loader2, X, ZoomIn } from "lucide-react";
 
-export interface RecipeImageModalProps {
+interface RecipeImageModalProps {
   src: string;
   alt: string;
-  dishName: string;
+  title: string;
   sourceName?: string;
   width?: number;
   height?: number;
@@ -17,13 +17,19 @@ export interface RecipeImageModalProps {
 export default function RecipeImageModal({
   src,
   alt,
-  dishName,
+  title,
   sourceName,
   width = 112,
   height = 112,
   className = "",
 }: RecipeImageModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [imageStatus, setImageStatus] = useState<"loading" | "loaded" | "error">("loading");
+
+  function handleOpen() {
+    setImageStatus("loading");
+    setIsOpen(true);
+  }
 
   // Close on Escape key
   useEffect(() => {
@@ -47,8 +53,8 @@ export default function RecipeImageModal({
       {/* Clickable thumbnail with zoom hint */}
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
-        aria-label={`View full photo for ${dishName}`}
+        onClick={handleOpen}
+        aria-label={`View full photo for ${title}`}
         title="Click to expand photo"
         className={`group relative shrink-0 cursor-pointer overflow-hidden rounded-xl border border-border bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong ${className}`}
       >
@@ -75,7 +81,7 @@ export default function RecipeImageModal({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`Full photo preview for ${dishName}`}
+          aria-label={`Full photo preview for ${title}`}
           onClick={() => setIsOpen(false)}
           className="fixed inset-0 z-50 flex items-center justify-center bg-text/75 p-3 sm:p-6 backdrop-blur-xs animate-in fade-in duration-150"
         >
@@ -86,7 +92,7 @@ export default function RecipeImageModal({
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
               <h4 className="font-serif text-base sm:text-lg font-semibold text-text truncate">
-                {dishName}
+                {title}
               </h4>
               <button
                 type="button"
@@ -99,15 +105,41 @@ export default function RecipeImageModal({
             </div>
 
             {/* Modal Image Body */}
-            <div className="flex flex-1 items-center justify-center overflow-hidden bg-background/50 p-2 sm:p-4">
-              <Image
-                src={src}
-                alt={alt}
-                width={800}
-                height={600}
-                unoptimized={!isTheMealDb}
-                className="max-h-[72dvh] w-auto max-w-full rounded-xl border border-border object-contain shadow-sm"
-              />
+            <div className="relative flex min-h-[260px] sm:min-h-[360px] flex-1 items-center justify-center overflow-hidden bg-background/50 p-2 sm:p-4">
+              {imageStatus === "loading" && (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs font-medium text-text-muted"
+                  aria-label="Loading photo"
+                >
+                  <Loader2
+                    className="h-6 w-6 animate-spin text-accent-strong"
+                    aria-hidden="true"
+                  />
+                  <span>Loading photo&hellip;</span>
+                </div>
+              )}
+              {imageStatus === "error" ? (
+                <div
+                  role="alert"
+                  className="flex flex-col items-center justify-center gap-2 text-center text-xs font-medium text-text-muted"
+                >
+                  <ImageOff className="h-6 w-6 text-text-muted" aria-hidden="true" />
+                  <span>Could not load photo.</span>
+                </div>
+              ) : (
+                <Image
+                  src={src}
+                  alt={alt}
+                  width={800}
+                  height={600}
+                  unoptimized={!isTheMealDb}
+                  onLoad={() => setImageStatus("loaded")}
+                  onError={() => setImageStatus("error")}
+                  className={`max-h-[72dvh] w-auto max-w-full rounded-xl border border-border object-contain shadow-sm transition-opacity duration-200 ${
+                    imageStatus === "loaded" ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              )}
             </div>
 
             {/* Modal Footer Caption - shown dynamically when source is known */}

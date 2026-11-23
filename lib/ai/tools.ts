@@ -1,27 +1,34 @@
-import { tool } from "ai";
-import z from "zod";
-import { lookupRecipeById, searchRecipesByName } from "@/lib/recipes/search";
 import {
-  fetchSafeRecipeHtml,
-  extractRecipeFromHtml,
+  tool,
+  type InferUITools,
+  type UIMessage,
+  type UIDataTypes,
+  type ToolUIPart,
+} from "ai";
+import z from "zod";
+import { getMealDbRecipeById, searchMealDbRecipes } from "@/lib/recipes/mealdb";
+import {
+  assertSafeRecipeUrl,
+  fetchSafeUrlHtml,
+  extractUrlRecipe,
+  isTransientFetchFailure,
+  formatFetchErrorMessage,
 } from "@/lib/recipes/url-import";
 import {
-  structureNormalizedRecipe,
-  structureImportedRecipe,
+  structureMealDbRecipe,
+  structureUrlRecipe,
+  type GetRecipeOutput,
+  type ImportUrlRecipeOutput,
 } from "@/lib/recipes/structure";
-import { searchCookingWeb } from "@/lib/ai/web-search";
-import type { ShowRecipeCardOutput, ImportRecipeUrlOutput } from "./types";
-
-export type { ShowRecipeCardOutput };
+import { extractWebPage, searchWebPage } from "@/lib/ai/tavily";
 
 export function createCookingTools(modelId?: string) {
-  const searchDishByName = tool({
+  const searchRecipes = tool({
     description:
       "Search TheMealDB for real, verified meal recipes by dish name or main ingredient keyword. " +
       "Returns candidate recipe matches so the user can preview options and choose one. " +
       "Use this whenever the user asks to cook or search for a dish (e.g., 'how to make carbonara', 'chicken curry recipe'). " +
       "Do NOT call this tool for general cooking definitions or technique questions (e.g., 'what does simmer mean?').",
-
     inputSchema: z.object({
       query: z
         .string()
@@ -38,58 +45,46 @@ export function createCookingTools(modelId?: string) {
           "Number of recipes to skip for pagination (e.g. 3 to see the next batch of recipes)",
         ),
     }),
-
-    execute: ({ query, offset }) => searchRecipesByName(query, offset),
+    execute: ({ query, offset }) => searchMealDbRecipes(query, offset),
   });
 
-  const showRecipeCard = tool({
+  const getRecipe = tool({
     description:
-      "Look up a specific meal by its TheMealDB mealId, structure its instructions into beginner-friendly steps, and display its full Recipe Card. " +
+      "Look up a specific meal by its TheMealDB recipe id, structure its instructions into beginner-friendly steps, and display its full Recipe Card. " +
       "Call this tool ONLY when the user clicks 'View full recipe' or explicitly asks to open/view the full recipe card for a specific match.",
     inputSchema: z.object({
-      mealId: z
+      id: z
         .string()
         .trim()
         .min(1)
-        .describe("The TheMealDB meal ID to look up, e.g. '52982' or '52772'"),
-      mealName: z
+        .describe(
+          "The TheMealDB recipe ID to look up, e.g. '52982' or '52772'",
+        ),
+      title: z
         .string()
         .trim()
         .min(1)
         .optional()
         .describe(
-          "The name of the meal being opened, e.g. 'Spaghetti Alla Carbonara'",
+          "The title of the recipe being opened, e.g. 'Spaghetti Alla Carbonara'",
         ),
     }),
-    execute: async ({ mealId, mealName }): Promise<ShowRecipeCardOutput> => {
-      const rawRecipe = await lookupRecipeById(mealId);
-      if (!rawRecipe) {
+    execute: async ({ id, title }): Promise<GetRecipeOutput> => {
+      const normalizedRecipe = await getMealDbRecipeById(id);
+      if (!normalizedRecipe) {
         return {
           status: "not-found",
-          mealId,
-          mealName,
-          message: `Could not find recipe #${mealId} in TheMealDB.`,
+          id,
+          title,
+          message: `Could not find recipe #${id} in TheMealDB.`,
         };
       }
 
-      const validation = await structureNormalizedRecipe(rawRecipe, modelId);
-      if (!validation.success) {
-        return {
-          status: "validation-error",
-          mealId,
-          mealName: rawRecipe.name,
-          message: validation.error,
-        };
-      }
-
-      return {
-        status: "success",
-        recipe: validation.data,
-      };
+      return structureMealDbRecipe(normalizedRecipe, modelId);
     },
   });
 
-  const importRecipeFromUrl = tool({
+  const importUrlRecipe = tool({
     description:
       "Fetch a user-provided recipe webpage URL, extract its recipe content, structure it into beginner-friendly steps, and display a full Recipe Card. " +
       "Call this tool whenever the user pastes or asks to import a recipe from an http:// or https:// URL.",
@@ -100,41 +95,49 @@ export function createCookingTools(modelId?: string) {
         .min(1)
         .describe("The http:// or https:// recipe URL provided by the user"),
     }),
-    execute: async ({ url }): Promise<ImportRecipeUrlOutput> => {
+    execute: async ({ url }): Promise<ImportUrlRecipeOutput> => {
       try {
-        const { html, finalUrl } = await fetchSafeRecipeHtml(url);
-        const candidate = extractRecipeFromHtml(html, finalUrl);
-
-        const validation = await structureImportedRecipe(candidate, modelId);
-        if (validation.status === "success") {
-          return {
-            status: "success",
-            recipe: validation.recipe,
-          };
+        const { html, finalUrl } = await fetchSafeUrlHtml(url);
+        const extractedRecipe = extractUrlRecipe(html, finalUrl);
+        return await structureUrlRecipe(extractedRecipe, modelId);
+      } catch (error) {
+        if (isTransientFetchFailure(error)) {
+          try {
+            const safeUrl = await assertSafeRecipeUrl(url);
+            const extractedRecipeViaTavily = await extractWebPage(safeUrl.href);
+            if (extractedRecipeViaTavily.status === "success") {
+              const siteName =
+                safeUrl.hostname.replace(/^www\./i, "") || "Web Recipe";
+              return await structureUrlRecipe(
+                {
+                  mode: "page-text",
+                  title: siteName,
+                  textSnippet: extractedRecipeViaTavily.content,
+                  youtubeUrl: null,
+                  siteName,
+                  sourceUrl: safeUrl.href,
+                },
+                modelId,
+              );
+            }
+          } catch {
+            // Fall through to the friendly fetch-error message below
+          }
         }
 
         return {
-          status: validation.status,
-          url: candidate.pageUrl,
-          message: validation.message,
-        };
-      } catch (error) {
-        return {
           status: "fetch-error",
           url,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Could not fetch that URL.",
+          message: formatFetchErrorMessage(error, url),
         };
       }
     },
   });
 
-  const searchWeb = tool({
+  const webSearch = tool({
     description:
       "Search the web for live cooking information, seasonal produce, ingredient substitutions, or recipes not found in TheMealDB. " +
-      "Do NOT call this for dishes already found by searchDishByName or when the user already provided a recipe URL (use importRecipeFromUrl for URLs).",
+      "Do NOT call this for dishes already found by searchRecipes or when the user already provided a recipe URL (use importUrlRecipe for URLs).",
     inputSchema: z.object({
       query: z
         .string()
@@ -144,13 +147,21 @@ export function createCookingTools(modelId?: string) {
           "A focused cooking search query, e.g. 'substitute for buttermilk in pancakes' or 'traditional beef rendang recipe'",
         ),
     }),
-    execute: ({ query }) => searchCookingWeb(query),
+    execute: ({ query }) => searchWebPage(query),
   });
 
   return {
-    searchDishByName,
-    showRecipeCard,
-    importRecipeFromUrl,
-    searchWeb,
+    searchRecipes,
+    getRecipe,
+    importUrlRecipe,
+    webSearch,
   };
 }
+
+export type CookingTools = InferUITools<ReturnType<typeof createCookingTools>>;
+export type ChatMessage = UIMessage<never, UIDataTypes, CookingTools>;
+export type CookingToolPart = ToolUIPart<CookingTools>;
+export type RecipeCardToolPart = Extract<
+  CookingToolPart,
+  { type: "tool-getRecipe" | "tool-importUrlRecipe" }
+>;

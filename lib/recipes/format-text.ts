@@ -1,13 +1,9 @@
 export type RecipeTextSegment =
   | { kind: "text"; value: string }
-  | { kind: "paren"; value: string }
   | { kind: "noteRef"; value: string; raw: string };
 
 const NOTE_REFERENCE_PATTERN =
   /^(?:see\s+)?notes?\s+\d+[a-z]?(?:\s*(?:,|&|and)\s*\d+[a-z]?)*$/i;
-
-const UNIT_OR_NUMERIC_PATTERN =
-  /^\d+(?:[./-]\d+)?\s*(?:°|c\b|f\b|g\b|kg\b|ml\b|l\b|oz\b|lb|tsp|tbsp|cup|min|hr)/i;
 
 const NOTE_PREFIX_PATTERN =
   /^(Notes?\s+\d+[a-z]?(?:\s*\([^)]+\)|\s*[-–—]\s*[^:]{1,35})?\s*[:.]|\d+[a-z]?[.):])\s+([\s\S]+)$/i;
@@ -27,10 +23,11 @@ function pushMergedText(
   segments.push({ kind: "text", value: text });
 }
 
-function splitParentheticalSegments(
-  input: string,
-  treatOtherParenAsCue: (innerText: string) => boolean,
-): RecipeTextSegment[] {
+/**
+ * Splits recipe text into plain text and `(Note ...)` references so UI can
+ * highlight note links without altering surrounding parenthetical text.
+ */
+export function splitRecipeNoteRefs(input: string): RecipeTextSegment[] {
   if (!input) return [{ kind: "text", value: "" }];
 
   const segments: RecipeTextSegment[] = [];
@@ -48,8 +45,6 @@ function splitParentheticalSegments(
 
     if (NOTE_REFERENCE_PATTERN.test(inner)) {
       segments.push({ kind: "noteRef", value: inner, raw });
-    } else if (treatOtherParenAsCue(inner)) {
-      segments.push({ kind: "paren", value: raw });
     } else {
       pushMergedText(segments, raw);
     }
@@ -65,32 +60,10 @@ function splitParentheticalSegments(
 }
 
 /**
- * Splits an ingredient description into main text, note references (e.g. `(Note 1b)`),
- * and parenthetical clarifications so UI can emphasize the main ingredient name.
- */
-export function splitIngredientSegments(text: string): RecipeTextSegment[] {
-  return splitParentheticalSegments(text, () => true);
-}
-
-/**
- * Splits a cooking step into action text, explanatory parenthetical cues,
- * and note references while keeping numeric/unit conversions as regular text.
- */
-export function splitStepSegments(text: string): RecipeTextSegment[] {
-  return splitParentheticalSegments(
-    text,
-    (inner) =>
-      inner.length >= 6 &&
-      !UNIT_OR_NUMERIC_PATTERN.test(inner) &&
-      inner.split(/\s+/).length >= 2,
-  );
-}
-
-/**
  * Splits a recipe note into an optional leading label (e.g. `Note 1b - Onions:`,
  * `Storage:`, or `2.`) and its explanation body for clearer scannability.
  */
-export function splitRecipeNotePrefix(note: string): {
+export function splitRecipeNote(note: string): {
   prefix: string | null;
   body: string;
 } {

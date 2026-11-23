@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMealRecord, translateSynonyms } from "@/lib/recipes/search";
+import {
+  normalizeMealDbRecord,
+  translateSynonyms,
+} from "@/lib/recipes/mealdb";
 
-describe("normalizeMealRecord", () => {
+describe("normalizeMealDbRecord", () => {
   it("extracts non-empty ingredient and measure pairs up to 20", () => {
     const raw = {
       idMeal: "52772",
@@ -26,37 +29,36 @@ describe("normalizeMealRecord", () => {
       strMeasure6: "2 pounds",
     };
 
-    const normalized = normalizeMealRecord(raw);
+    const normalized = normalizeMealDbRecord(raw);
 
     expect(normalized.id).toBe("52772");
-    expect(normalized.name).toBe("Teriyaki Chicken Casserole");
+    expect(normalized.title).toBe("Teriyaki Chicken Casserole");
     expect(normalized.category).toBe("Chicken");
     expect(normalized.area).toBe("Japanese");
     expect(normalized.instructions).toBe("Bake at 350F for 30 minutes.");
-    expect(normalized.mealUrl).toBe("https://www.themealdb.com/meal/52772");
-    expect(normalized.sourceUrl).toBe("https://example.com/recipe");
+    expect(normalized.sourceUrl).toBe("https://www.themealdb.com/meal/52772");
     expect(normalized.youtubeUrl).toBe("https://www.youtube.com/watch?v=4aZr5hZXP_s");
 
     // Only non-empty ingredients should be included
     expect(normalized.ingredients).toEqual([
-      { item: "soy sauce", measure: "3/4 cup" },
-      { item: "water", measure: "1/2 cup" },
-      { item: "chicken breasts", measure: "2 pounds" },
+      { item: "soy sauce", amount: "3/4 cup" },
+      { item: "water", amount: "1/2 cup" },
+      { item: "chicken breasts", amount: "2 pounds" },
     ]);
   });
 
   it("handles empty or missing meal attributes gracefully", () => {
     const raw = {};
-    const normalized = normalizeMealRecord(raw);
+    const normalized = normalizeMealDbRecord(raw);
 
     expect(normalized.id).toBe("");
-    expect(normalized.name).toBe("Untitled Recipe");
+    expect(normalized.title).toBe("Untitled Recipe");
     expect(normalized.category).toBeNull();
     expect(normalized.area).toBeNull();
     expect(normalized.instructions).toBe("");
     expect(normalized.ingredients).toEqual([]);
     expect(normalized.thumbnailUrl).toBeNull();
-    expect(normalized.sourceUrl).toBeNull();
+    expect(normalized.sourceUrl).toBe("https://www.themealdb.com/meal/");
     expect(normalized.youtubeUrl).toBeNull();
   });
 });

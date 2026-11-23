@@ -48,11 +48,11 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 1: Streaming chat with a cooking system prompt — Done (Gemini models in `config/models.ts` & `config/ai.ts`, streaming route in `app/api/chat/route.ts`, responsive UI with model switcher).
 
-### [x] Step 2: Dish-name search with tool calling — Done (TheMealDB search & normalizer in `lib/recipes/search.ts`, tool in `lib/ai/tools.ts`, streaming loop with `stopWhen: isStepCount(3)` and tool logging in `app/api/chat/route.ts`, grounded prompt in `config/ai.ts`, tool status pill & attribution footer in UI).
+### [x] Step 2: Dish-name search with tool calling — Done (TheMealDB search & normalizer in `lib/recipes/mealdb.ts`, tool in `lib/ai/tools.ts`, streaming loop with `stopWhen: isStepCount(3)` and tool logging in `app/api/chat/route.ts`, grounded prompt in `config/ai.ts`, tool status pill & attribution footer in UI).
 
-### [x] Step 3: Structured recipe and recipe card — Done (Zod v4 schema in `lib/recipes/schema.ts`, Vitest unit test suite in `lib/recipes/__tests__/`, AI SDK `Output.object` structure pipeline in `lib/recipes/structure.ts`, two-step tool flow in `lib/ai/tools.ts`, `<RecipeCard />` with dynamic photo modal lightbox and collapsible steps, component separation and `lib/ai/types.ts`).
+### [x] Step 3: Structured recipe and recipe card — Done (Zod v4 schema in `lib/recipes/schema.ts`, Vitest unit test suite in `lib/recipes/__tests__/`, AI SDK `Output.object` structure pipeline in `lib/recipes/structure.ts`, two-step tool flow in `lib/ai/tools.ts`, `<RecipeCard />` with dynamic photo modal lightbox and collapsible steps, component separation and `InferUITools` types in `lib/ai/tools.ts`).
 
-### [x] Step 4: Link import, web search, and file/image uploads — Done (SSRF-safe URL import with JSON-LD/notes/YouTube extraction in `lib/recipes/url-import.ts`, optional `notes` in `lib/recipes/schema.ts`, Tavily `searchWeb` tool in `lib/ai/web-search.ts`, multimodal upload resizing & server MIME validation in `lib/files/` & `app/api/chat/route.ts`, source footers & `RecipeNotesCollapsible` in UI).
+### [x] Step 4: Link import, web search, and file/image uploads — Done (SSRF-safe URL import with JSON-LD/notes/YouTube extraction in `lib/recipes/url-import.ts`, optional `notes` in `lib/recipes/schema.ts`, Tavily `webSearch` tool & `/extract` fallback in `lib/ai/tavily.ts`, multimodal upload resizing & server MIME validation in `lib/files/attachments.ts` & `app/api/chat/route.ts`, source footers & `RecipeNotesCollapsible` in UI).
 
 ### [ ] Step 5a: Supabase and saved chats
 - **Build:** a Supabase project, tables for chats and messages, a sidebar of past chats, and a `/chat/[id]` route with loading and error states.
@@ -62,10 +62,10 @@ Each step ends with a working app. Load the named skills before the relevant wor
 - **You can explain:** why we store messages when the model is stateless. How a dynamic route works. When to use a server action vs a route handler. What happens to our data if Supabase pauses.
 
 ### [ ] Step 5b: Recipes in the database and vector search
-- **Build:** an import script that copies TheMealDB recipes (official endpoints) into Supabase, an embedding model (chosen here), embeddings for every recipe, and vector search replacing the live TheMealDB calls from step 2.
+- **Build:** an import script that copies TheMealDB recipes (official endpoints) into Supabase, an embedding model (chosen here), embeddings for every recipe, vector search replacing the live TheMealDB calls from step 2, and the option to save a validated web-imported recipe (`importUrlRecipe`) + its embedding into the database.
 - **Skills:** `supabase`, `ai-sdk`.
 - **Read first:** Supabase: vectors and pgvector. AI SDK: embeddings.
-- **Done when:** one command rebuilds the recipe table from an empty database. An ingredient-list query returns sensible recipes without exact matches. At least 5 queries are compared against keyword search, with results written to DECISIONS.md. The dish-name tool now reads from our database. The embedding model is recorded in DECISIONS.md.
+- **Done when:** one command rebuilds the base TheMealDB recipes without wiping saved web recipes. Saving an imported web recipe embeds and stores it so future `searchRecipes` queries find it directly in our database. An ingredient-list query returns sensible recipes without exact matches. At least 5 queries are compared against keyword search, with results written to DECISIONS.md. The dish-name tool now reads from our database. The embedding model is recorded in DECISIONS.md.
 - **You can explain:** what an embedding is. Why vector search finds "something warm with chicken" when keywords don't. Why changing the embedding model means re-embedding every recipe.
 
 ### [ ] Step 6: Adaptation, safety table, cook-along
@@ -84,6 +84,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ## 7. Changes log
 
+- 2026-11-21: Added saving validated web-imported recipes (`importUrlRecipe`) + embeddings to Supabase in Step 5b so the recipe database grows over time without re-searching the web.
 - 2026-11-15: Completed Step 4 (link import with SSRF guards, recipe notes & YouTube video extraction; switched web search from Google Search Grounding to Tavily due to 0 free-tier quota; client-side image resize and server attachment validation).
 - 2026-11-11: Completed Step 3 (Structured recipe schema, output validation with Vitest tests, two-step tool flow with compact match previews, full `<RecipeCard />` with dynamic attribution and photo modal lightbox, component separation and `lib/ai/types.ts`).
 

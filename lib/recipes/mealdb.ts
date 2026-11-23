@@ -1,31 +1,32 @@
-export interface RecipeIngredient {
-  item: string;
-  measure: string;
-}
+import type { RecipeIngredient } from "./schema";
 
-export interface NormalizedRecipe {
+export const THEMEALDB_URL = "https://www.themealdb.com/";
+export const THEMEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
+export const THEMEALDB_CREDIT_TEXT =
+  "Recipe data and imagery: TheMealDB (https://www.themealdb.com/)";
+
+export interface NormalizedMealDbRecipe {
   id: string;
-  name: string;
+  title: string;
   category: string | null;
   area: string | null;
   instructions: string;
   ingredients: RecipeIngredient[];
   thumbnailUrl: string | null;
-  mealUrl: string;
-  sourceUrl: string | null;
+  sourceUrl: string;
   youtubeUrl: string | null;
 }
 
-export interface DishSearchResult {
+export interface SearchRecipesOutput {
   query: string;
   translatedQuery?: string;
   found: boolean;
   totalMatches: number;
   offset: number;
-  recipes: NormalizedRecipe[];
+  recipes: NormalizedMealDbRecipe[];
 }
 
-type RawMealRecord = Record<string, unknown>;
+type RawMealDbRecord = Record<string, unknown>;
 
 function toNonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -33,53 +34,54 @@ function toNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function normalizeMealRecord(raw: RawMealRecord): NormalizedRecipe {
+export function normalizeMealDbRecord(
+  raw: RawMealDbRecord,
+): NormalizedMealDbRecipe {
   const id = toNonEmptyString(raw.idMeal) ?? "";
   const ingredients: RecipeIngredient[] = [];
 
   for (let i = 1; i <= 20; i++) {
     const item = toNonEmptyString(raw[`strIngredient${i}`]);
-    const measure = toNonEmptyString(raw[`strMeasure${i}`]) ?? "";
-    if (item) ingredients.push({ item, measure });
+    const amount = toNonEmptyString(raw[`strMeasure${i}`]) ?? "";
+    if (item) ingredients.push({ item, amount });
   }
 
   return {
     id,
-    name: toNonEmptyString(raw.strMeal) ?? "Untitled Recipe",
+    title: toNonEmptyString(raw.strMeal) ?? "Untitled Recipe",
     category: toNonEmptyString(raw.strCategory),
     area: toNonEmptyString(raw.strArea),
     instructions: toNonEmptyString(raw.strInstructions) ?? "",
     ingredients,
     thumbnailUrl: toNonEmptyString(raw.strMealThumb),
-    mealUrl: `https://www.themealdb.com/meal/${id}`,
-    sourceUrl: toNonEmptyString(raw.strSource),
+    sourceUrl: `https://www.themealdb.com/meal/${id}`,
     youtubeUrl: toNonEmptyString(raw.strYoutube),
   };
 }
 
-const THEMEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
-
-async function fetchMealRecords(endpoint: string): Promise<RawMealRecord[]> {
+async function fetchMealDbRecords(
+  endpoint: string,
+): Promise<RawMealDbRecord[]> {
   try {
     const res = await fetch(`${THEMEALDB_BASE_URL}/${endpoint}`);
     if (!res.ok) return [];
 
     const data = (await res.json()) as { meals?: unknown };
-    return Array.isArray(data.meals) ? (data.meals as RawMealRecord[]) : [];
+    return Array.isArray(data.meals) ? (data.meals as RawMealDbRecord[]) : [];
   } catch (error) {
     console.error(`TheMealDB fetch error (${endpoint}):`, error);
     return [];
   }
 }
 
-async function fetchMealsByTerm(term: string): Promise<RawMealRecord[]> {
+async function fetchMealDbByTerm(term: string): Promise<RawMealDbRecord[]> {
   const trimmed = term.trim();
   if (!trimmed) return [];
 
-  return fetchMealRecords(`search.php?s=${encodeURIComponent(trimmed)}`);
+  return fetchMealDbRecords(`search.php?s=${encodeURIComponent(trimmed)}`);
 }
 
-// Only US to UK and not the other way is because the MealDB data is based of british culture
+// Only US to UK and not the other way is because TheMealDB data uses British culinary terms
 const US_TO_UK_SYNONYMS: Record<string, string> = {
   eggplant: "aubergine",
   zucchini: "courgette",
@@ -97,14 +99,16 @@ export function translateSynonyms(query: string): string | null {
   return translated !== query ? translated : null;
 }
 
-async function searchMultiWordMatches(query: string): Promise<RawMealRecord[]> {
+async function searchMultiWordMatches(
+  query: string,
+): Promise<RawMealDbRecord[]> {
   const terms = query.split(/\s+/).filter((t) => t.length > 2);
   if (terms.length <= 1) return [];
 
   const termResults = await Promise.all(
-    terms.map((term) => fetchMealsByTerm(term)),
+    terms.map((term) => fetchMealDbByTerm(term)),
   );
-  const mealMap = new Map<string, RawMealRecord>();
+  const mealMap = new Map<string, RawMealDbRecord>();
 
   for (const result of termResults) {
     for (const meal of result) {
@@ -115,13 +119,12 @@ async function searchMultiWordMatches(query: string): Promise<RawMealRecord[]> {
     }
   }
 
-  // Enforce meaningful overlap to prevent single incidental keyword false-positives
+  // Enforce meaningful overlap to prevent single incidental keyword false-positives:
   // For a 2-word query ("spaghetti carbonara"), both words must appear in the title.
   // For 3+ words, at least 2 words or >= 50% of the query terms must appear in the title.
   const minRequiredMatches =
     terms.length === 2 ? 2 : Math.max(2, Math.ceil(terms.length * 0.5));
 
-  // Score candidates by how many query words appear in their meal title
   const scoredMeals = Array.from(mealMap.values())
     .map((meal) => {
       const title = String(meal.strMeal ?? "").toLowerCase();
@@ -134,11 +137,11 @@ async function searchMultiWordMatches(query: string): Promise<RawMealRecord[]> {
   return scoredMeals.map((item) => item.meal);
 }
 
-export async function searchRecipesByName(
+export async function searchMealDbRecipes(
   query: string,
   offset = 0,
   limit = 3,
-): Promise<DishSearchResult> {
+): Promise<SearchRecipesOutput> {
   const cleanQuery = query.trim().toLowerCase();
   if (!cleanQuery) {
     return {
@@ -150,14 +153,14 @@ export async function searchRecipesByName(
     };
   }
 
-  let rawMeals = await fetchMealsByTerm(cleanQuery);
+  let rawMeals = await fetchMealDbByTerm(cleanQuery);
   let searchedAs: string | undefined;
 
-  // 2. Fallback A: US -> UK synonym translation
+  // Fallback A: US -> UK synonym translation
   if (rawMeals.length === 0) {
     const translated = translateSynonyms(cleanQuery);
     if (translated) {
-      const synonymMeals = await fetchMealsByTerm(translated);
+      const synonymMeals = await fetchMealDbByTerm(translated);
       if (synonymMeals.length > 0) {
         rawMeals = synonymMeals;
         searchedAs = translated;
@@ -165,7 +168,7 @@ export async function searchRecipesByName(
     }
   }
 
-  // 3. Fallback B: Multi-word split & match scoring (e.g. "spaghetti carbonara")
+  // Fallback B: Multi-word split & match scoring (e.g. "spaghetti carbonara")
   if (rawMeals.length === 0) {
     rawMeals = await searchMultiWordMatches(cleanQuery);
   }
@@ -173,7 +176,7 @@ export async function searchRecipesByName(
   const totalMatches = rawMeals.length;
   const normalizedMeals = rawMeals
     .slice(offset, offset + limit)
-    .map(normalizeMealRecord);
+    .map(normalizeMealDbRecord);
 
   return {
     query,
@@ -185,14 +188,14 @@ export async function searchRecipesByName(
   };
 }
 
-export async function lookupRecipeById(
+export async function getMealDbRecipeById(
   id: string,
-): Promise<NormalizedRecipe | null> {
+): Promise<NormalizedMealDbRecipe | null> {
   const trimmed = id.trim();
   if (!trimmed) return null;
 
-  const meals = await fetchMealRecords(
+  const meals = await fetchMealDbRecords(
     `lookup.php?i=${encodeURIComponent(trimmed)}`,
   );
-  return meals[0] ? normalizeMealRecord(meals[0]) : null;
+  return meals[0] ? normalizeMealDbRecord(meals[0]) : null;
 }

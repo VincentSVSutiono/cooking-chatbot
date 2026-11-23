@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-export interface RecipeExpandButtonProps {
+interface RecipeExpandButtonProps {
   isExpanded: boolean;
   onToggle: () => void;
   expandedLabel: string;

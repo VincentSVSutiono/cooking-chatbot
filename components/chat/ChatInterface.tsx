@@ -1,34 +1,21 @@
 "use client";
 
-import { useState, useRef, useEffect, type KeyboardEvent, type FormEvent } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
 import type { FileUIPart } from "ai";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import ChatHeader from "./ChatHeader";
 import ChatInputBar from "./ChatInputBar";
 import ChatMessageItem from "./ChatMessageItem";
-import ChatWelcomeScreen, {
-  STARTER_PROMPTS_POOL,
-  pickRandomPrompts,
-} from "./ChatWelcomeScreen";
+import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import { DEFAULT_MODEL_ID, type ModelId } from "@/config/models";
-import type { NormalizedRecipe } from "@/lib/recipes/search";
-import { isTextPart } from "@/lib/ai/types";
-import { prepareFilesForChat } from "@/lib/files/attachments";
-import { useVisualViewport } from "@/hooks/useVisualViewport";
-import { useAutogrowTextarea } from "@/hooks/useAutogrowTextarea";
+import type { NormalizedMealDbRecipe } from "@/lib/recipes/mealdb";
+import type { ChatMessage } from "@/lib/ai/tools";
 
 export default function ChatInterface() {
-  const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelId>(DEFAULT_MODEL_ID);
-  const [attachments, setAttachments] = useState<FileUIPart[]>([]);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [isPreparingFiles, setIsPreparingFiles] = useState(false);
-  const [starterPrompts, setStarterPrompts] = useState<string[]>(() =>
-    STARTER_PROMPTS_POOL.slice(0, 3),
-  );
+  const [chatSessionKey, setChatSessionKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
     messages,
@@ -39,13 +26,16 @@ export default function ChatInterface() {
     regenerate,
     clearError,
     stop,
-  } = useChat();
+  } = useChat<ChatMessage>();
 
   const isBusy = status === "submitted" || status === "streaming";
   const isQuotaError = error?.message?.includes("QUOTA_EXCEEDED") ?? false;
-
-  const { handleFocus, handleBlur } = useVisualViewport();
-  useAutogrowTextarea(textareaRef, input);
+  const isOverloadedError =
+    error?.message?.includes("MODEL_OVERLOADED") ?? false;
+  const isAwaitingAssistantStart =
+    isBusy &&
+    messages.length > 0 &&
+    messages[messages.length - 1].role === "user";
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -53,94 +43,33 @@ export default function ChatInterface() {
     }
   }, [messages, status]);
 
-  async function handleFilesSelected(fileList: FileList) {
-    setAttachmentError(null);
-    setIsPreparingFiles(true);
-    try {
-      const { files, error: prepError } = await prepareFilesForChat(
-        fileList,
-        attachments.length,
-      );
-      if (prepError) {
-        setAttachmentError(prepError);
-        return;
-      }
-      if (files.length > 0) {
-        setAttachments((prev) => [...prev, ...files]);
-      }
-    } catch (err) {
-      setAttachmentError(
-        err instanceof Error ? err.message : "Could not read attached file.",
-      );
-    } finally {
-      setIsPreparingFiles(false);
+  function handleSendMessage({
+    text,
+    files,
+  }: {
+    text?: string;
+    files?: FileUIPart[];
+  }) {
+    if (text) {
+      sendMessage({ text, files }, { body: { model: selectedModel } });
+    } else if (files && files.length > 0) {
+      sendMessage({ files }, { body: { model: selectedModel } });
     }
   }
 
-  function handleRemoveAttachment(index: number) {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-    setAttachmentError(null);
+  function handleSelectRecipe(recipe: NormalizedMealDbRecipe) {
+    handleSendMessage({ text: `Show me the recipe for ${recipe.title}` });
   }
 
-  function handleSubmit(e?: FormEvent<HTMLFormElement>) {
-    if (e) e.preventDefault();
-    const trimmed = input.trim();
-    if ((!trimmed && attachments.length === 0) || isBusy || isPreparingFiles) {
-      return;
-    }
-
-    const filesToSend = attachments.length > 0 ? attachments : undefined;
-    if (trimmed) {
-      sendMessage(
-        { text: trimmed, files: filesToSend },
-        { body: { model: selectedModel } },
-      );
-    } else if (filesToSend) {
-      sendMessage({ files: filesToSend }, { body: { model: selectedModel } });
-    }
-
-    setInput("");
-    setAttachments([]);
-    setAttachmentError(null);
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // On touchscreens / mobile keyboards, Enter creates a newline; users tap Send.
-    const isTouchDevice =
-      typeof window !== "undefined" &&
-      window.matchMedia("(pointer: coarse)").matches;
-
-    if (
-      e.key === "Enter" &&
-      !e.shiftKey &&
-      !isTouchDevice &&
-      !e.nativeEvent.isComposing
-    ) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  }
-
-  function handleStarterClick(promptText: string) {
-    sendMessage({ text: promptText }, { body: { model: selectedModel } });
-  }
-
-  function handleSelectRecipe(recipe: NormalizedRecipe) {
-    sendMessage(
-      { text: `Show me the recipe for ${recipe.name}` },
-      { body: { model: selectedModel } },
-    );
+  function handleImportUrl(url: string) {
+    handleSendMessage({ text: `Import the recipe from ${url}` });
   }
 
   function handleNewChat() {
     stop();
     clearError();
     setMessages([]);
-    setInput("");
-    setAttachments([]);
-    setAttachmentError(null);
-    setIsPreparingFiles(false);
-    setStarterPrompts(pickRandomPrompts(STARTER_PROMPTS_POOL, 3));
+    setChatSessionKey((prev) => prev + 1);
   }
 
   return (
@@ -156,12 +85,15 @@ export default function ChatInterface() {
         canNewChat={messages.length > 0 || Boolean(error) || isBusy}
       />
 
-      <main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 md:px-8 pt-3 sm:pt-6 pb-4 sm:pb-6 [scrollbar-gutter:stable]">
+      <main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 md:px-8 pt-3 sm:pt-6 pb-4 sm:pb-6 max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden sm:[scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto flex w-full max-w-[704px] flex-col gap-4 sm:gap-6 pb-2 sm:pb-4">
           {messages.length === 0 ? (
             <ChatWelcomeScreen
-              prompts={starterPrompts}
-              onSelectPrompt={handleStarterClick}
+              key={chatSessionKey}
+              shuffleOnMount={chatSessionKey > 0}
+              onSelectPrompt={(promptText) =>
+                handleSendMessage({ text: promptText })
+              }
               disabled={isBusy}
             />
           ) : (
@@ -174,12 +106,20 @@ export default function ChatInterface() {
               {messages.map((message, messageIndex) => {
                 const isLastMessage = messageIndex === messages.length - 1;
                 const hasTextPart = message.parts.some(
-                  (p) => isTextPart(p) && p.text.trim().length > 0,
+                  (p) => p.type === "text" && p.text.trim().length > 0,
+                );
+                const hasActiveTool = message.parts.some(
+                  (p) =>
+                    p.type.startsWith("tool-") &&
+                    "state" in p &&
+                    (p.state === "input-streaming" ||
+                      p.state === "input-available"),
                 );
                 const isAwaitingText =
                   isLastMessage &&
                   isBusy &&
                   !hasTextPart &&
+                  !hasActiveTool &&
                   message.role !== "user";
 
                 return (
@@ -189,9 +129,28 @@ export default function ChatInterface() {
                     isAwaitingText={isAwaitingText}
                     isBusy={isBusy}
                     onSelectRecipe={handleSelectRecipe}
+                    onImportUrl={handleImportUrl}
                   />
                 );
               })}
+
+              {isAwaitingAssistantStart && (
+                <article className="flex flex-col w-full min-w-0 items-start">
+                  <span className="mb-1 text-xs font-medium text-text-muted">
+                    Cooking Companion
+                  </span>
+                  <div
+                    className="flex items-center gap-2 py-1 text-sm text-text-muted"
+                    aria-label="Cooking companion is thinking"
+                  >
+                    <Loader2
+                      className="h-4 w-4 animate-spin text-accent-strong"
+                      aria-hidden="true"
+                    />
+                    <span>Writing your response&hellip;</span>
+                  </div>
+                </article>
+              )}
             </div>
           )}
 
@@ -209,12 +168,16 @@ export default function ChatInterface() {
                   <p className="font-medium text-warning">
                     {isQuotaError
                       ? "Model rate limit or quota reached"
-                      : "Something went wrong in the kitchen"}
+                      : isOverloadedError
+                        ? "Model is temporarily busy"
+                        : "Something went wrong in the kitchen"}
                   </p>
                   <p className="text-sm leading-relaxed text-text-muted">
                     {isQuotaError
                       ? "This model has reached its rate limit or daily quota. Please switch to another model using the selector in the input bar below, then click Try again."
-                      : "We couldn't reach the cooking assistant right now. Please check your connection or switch models and try again."}
+                      : isOverloadedError
+                        ? "This model is currently experiencing high demand. Please switch to another model using the selector in the input bar below, or click Try again in a moment."
+                        : "We couldn't reach the cooking assistant right now. Please check your connection or switch models and try again."}
                   </p>
                 </div>
               </div>
@@ -234,22 +197,12 @@ export default function ChatInterface() {
       </main>
 
       <ChatInputBar
-        input={input}
-        onInputChange={setInput}
-        onSubmit={handleSubmit}
-        onKeyDown={handleKeyDown}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        isBusy={isBusy}
+        key={chatSessionKey}
+        onSendMessage={handleSendMessage}
         onStop={stop}
+        isBusy={isBusy}
         selectedModel={selectedModel}
         onSelectModel={setSelectedModel}
-        textareaRef={textareaRef}
-        attachments={attachments}
-        attachmentError={attachmentError}
-        isPreparingFiles={isPreparingFiles}
-        onFilesSelected={handleFilesSelected}
-        onRemoveAttachment={handleRemoveAttachment}
       />
     </div>
   );

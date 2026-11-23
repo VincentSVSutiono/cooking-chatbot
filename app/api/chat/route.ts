@@ -8,11 +8,7 @@ import {
 } from "ai";
 import { getChatModel, COOKING_SYSTEM_PROMPT } from "@/config/ai";
 import { createCookingTools } from "@/lib/ai/tools";
-import {
-  ALLOWED_ATTACHMENT_MIME_TYPES,
-  MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_DATA_URL_LENGTH,
-} from "@/lib/files/constants";
+import { validateMessageAttachments } from "@/lib/files/attachments";
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -24,33 +20,19 @@ function isQuotaError(error: unknown): boolean {
   );
 }
 
-function validateMessageAttachments(messages: UIMessage[]): string | null {
-  for (const msg of messages) {
-    if (msg.role !== "user" || !Array.isArray(msg.parts)) continue;
-
-    const fileParts = msg.parts.filter((p) => p.type === "file");
-    if (fileParts.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-      return `You can only attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files per message.`;
-    }
-
-    for (const part of fileParts) {
-      if (!part.mediaType || !ALLOWED_ATTACHMENT_MIME_TYPES.has(part.mediaType)) {
-        return `Unsupported attachment type: ${part.mediaType ?? "unknown"}.`;
-      }
-      const matchesMediaType =
-        typeof part.url === "string" &&
-        (part.url.startsWith(`data:${part.mediaType};`) ||
-          part.url.startsWith(`data:${part.mediaType},`));
-      if (!matchesMediaType) {
-        return "Invalid file attachment. Please upload files using the attachment button.";
-      }
-      if (part.url.length > MAX_DATA_URL_LENGTH) {
-        return "An attached file exceeds the maximum allowed payload size.";
-      }
-    }
-  }
-
-  return null;
+function isHighDemandError(error: unknown): boolean {
+  const statusCode =
+    typeof error === "object" && error !== null && "statusCode" in error
+      ? (error as { statusCode?: unknown }).statusCode
+      : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    statusCode === 503 ||
+    message.includes("503") ||
+    message.includes("UNAVAILABLE") ||
+    message.toLowerCase().includes("high demand") ||
+    message.toLowerCase().includes("overloaded")
+  );
 }
 
 export async function POST(req: Request) {
@@ -111,6 +93,9 @@ export async function POST(req: Request) {
         if (isQuotaError(error)) {
           return "QUOTA_EXCEEDED: This model has reached its rate limit or daily quota. Please switch to another model using the selector below, then click Try again.";
         }
+        if (isHighDemandError(error)) {
+          return "MODEL_OVERLOADED: This model is currently experiencing high demand. Please switch to another model using the selector below or click Try again in a moment.";
+        }
         return "Couldn't reach the cooking assistant. Please try again.";
       },
     });
@@ -127,6 +112,15 @@ export async function POST(req: Request) {
             "QUOTA_EXCEEDED: This model has reached its rate limit or daily quota. Please switch to another model using the selector below, then click Try again.",
         },
         { status: 429 },
+      );
+    }
+    if (isHighDemandError(error)) {
+      return Response.json(
+        {
+          error:
+            "MODEL_OVERLOADED: This model is currently experiencing high demand. Please switch to another model using the selector below or click Try again in a moment.",
+        },
+        { status: 503 },
       );
     }
     return Response.json(

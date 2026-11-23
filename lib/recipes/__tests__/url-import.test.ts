@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   isPrivateOrReservedIp,
   assertSafeRecipeUrl,
-  fetchSafeRecipeHtml,
-  extractRecipeFromHtml,
+  fetchSafeUrlHtml,
+  extractUrlRecipe,
 } from "@/lib/recipes/url-import";
 
 describe("isPrivateOrReservedIp", () => {
@@ -102,7 +102,7 @@ describe("assertSafeRecipeUrl", () => {
   });
 });
 
-describe("extractRecipeFromHtml", () => {
+describe("extractUrlRecipe", () => {
   it("extracts a Schema.org Recipe from a standard JSON-LD script block", () => {
     const html = `
       <!doctype html>
@@ -142,7 +142,7 @@ describe("extractRecipeFromHtml", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(
+    const result = extractUrlRecipe(
       html,
       "https://sunnykitchen.example.com/fluffy-pancakes",
     );
@@ -155,11 +155,11 @@ describe("extractRecipeFromHtml", () => {
         "3 1/2 teaspoons baking powder",
         "1 cup milk",
       ]);
-      expect(result.rawInstructions).toContain("Whisk flour and baking powder");
+      expect(result.instructions).toContain("Whisk flour and baking powder");
       expect(result.prepTime).toBe("10 minutes");
       expect(result.cookTime).toBe("15 minutes");
       expect(result.totalTime).toBe("25 minutes");
-      expect(result.imageUrl).toBe(
+      expect(result.thumbnailUrl).toBe(
         "https://sunnykitchen.example.com/pancakes.jpg",
       );
       expect(result.category).toBe("Breakfast");
@@ -190,7 +190,7 @@ describe("extractRecipeFromHtml", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(
+    const result = extractUrlRecipe(
       html,
       "https://pasta.example.com/garlic-pasta",
     );
@@ -199,7 +199,7 @@ describe("extractRecipeFromHtml", () => {
     if (result.mode === "json-ld") {
       expect(result.title).toBe("Simple Garlic Pasta");
       expect(result.ingredients).toEqual(["200g spaghetti", "4 cloves garlic"]);
-      expect(result.rawInstructions).toContain("Gently fry sliced garlic");
+      expect(result.instructions).toContain("Gently fry sliced garlic");
     }
   });
 
@@ -222,7 +222,7 @@ describe("extractRecipeFromHtml", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(
+    const result = extractUrlRecipe(
       html,
       "https://blog.example.com/tomato-soup",
     );
@@ -236,7 +236,7 @@ describe("extractRecipeFromHtml", () => {
   });
 });
 
-describe("fetchSafeRecipeHtml", () => {
+describe("fetchSafeUrlHtml", () => {
   const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
   it("returns HTML and finalUrl for a valid public HTML response", async () => {
@@ -246,7 +246,7 @@ describe("fetchSafeRecipeHtml", () => {
         headers: { "content-type": "TEXT/HTML; charset=utf-8" },
       });
 
-    const result = await fetchSafeRecipeHtml("https://recipes.example.com/pasta", {
+    const result = await fetchSafeUrlHtml("https://recipes.example.com/pasta", {
       lookupFn: publicLookup,
       fetchFn: stubFetch,
     });
@@ -271,7 +271,7 @@ describe("fetchSafeRecipeHtml", () => {
       });
     };
 
-    const result = await fetchSafeRecipeHtml("https://recipes.example.com/old-pasta", {
+    const result = await fetchSafeUrlHtml("https://recipes.example.com/old-pasta", {
       lookupFn: publicLookup,
       fetchFn: stubFetch,
     });
@@ -288,7 +288,7 @@ describe("fetchSafeRecipeHtml", () => {
       });
 
     await expect(
-      fetchSafeRecipeHtml("https://recipes.example.com/sneaky-redirect", {
+      fetchSafeUrlHtml("https://recipes.example.com/sneaky-redirect", {
         lookupFn: publicLookup,
         fetchFn: stubFetch,
       }),
@@ -303,7 +303,7 @@ describe("fetchSafeRecipeHtml", () => {
       });
 
     await expect(
-      fetchSafeRecipeHtml("https://recipes.example.com/loop", {
+      fetchSafeUrlHtml("https://recipes.example.com/loop", {
         lookupFn: publicLookup,
         fetchFn: stubFetch,
       }),
@@ -318,7 +318,7 @@ describe("fetchSafeRecipeHtml", () => {
       });
 
     await expect(
-      fetchSafeRecipeHtml("https://recipes.example.com/cookbook.pdf", {
+      fetchSafeUrlHtml("https://recipes.example.com/cookbook.pdf", {
         lookupFn: publicLookup,
         fetchFn: stubFetch,
       }),
@@ -333,7 +333,7 @@ describe("fetchSafeRecipeHtml", () => {
       });
 
     await expect(
-      fetchSafeRecipeHtml("https://recipes.example.com/missing", {
+      fetchSafeUrlHtml("https://recipes.example.com/missing", {
         lookupFn: publicLookup,
         fetchFn: stubFetch,
       }),
@@ -341,7 +341,7 @@ describe("fetchSafeRecipeHtml", () => {
   });
 });
 
-describe("extractRecipeFromHtml recipe notes extraction", () => {
+describe("extractUrlRecipe recipe notes extraction", () => {
   const baseJsonLd = `
     <script type="application/ld+json">
       {
@@ -370,7 +370,7 @@ describe("extractRecipeFromHtml recipe notes extraction", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(html, "https://blog.example.com/curry");
+    const result = extractUrlRecipe(html, "https://blog.example.com/curry");
     expect(result.mode).toBe("json-ld");
     if (result.mode === "json-ld") {
       expect(result.notesText).toContain("1a. Chillies - adjust to taste.");
@@ -396,7 +396,7 @@ describe("extractRecipeFromHtml recipe notes extraction", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(html, "https://tasty.example.com/curry");
+    const result = extractUrlRecipe(html, "https://tasty.example.com/curry");
     expect(result.mode).toBe("json-ld");
     if (result.mode === "json-ld") {
       expect(result.notesText).toContain("Note 1: Can substitute shallots for onion.");
@@ -423,7 +423,7 @@ describe("extractRecipeFromHtml recipe notes extraction", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(html, "https://custom.example.com/curry");
+    const result = extractUrlRecipe(html, "https://custom.example.com/curry");
     expect(result.mode).toBe("json-ld");
     if (result.mode === "json-ld") {
       expect(result.notesText).toContain("Toast spices on low heat");
@@ -433,7 +433,7 @@ describe("extractRecipeFromHtml recipe notes extraction", () => {
 
   it("sets notesText to null when no recipe notes section is present", () => {
     const html = `<html><head>${baseJsonLd}</head><body><p>Just a recipe.</p></body></html>`;
-    const result = extractRecipeFromHtml(html, "https://plain.example.com/curry");
+    const result = extractUrlRecipe(html, "https://plain.example.com/curry");
     expect(result.mode).toBe("json-ld");
     if (result.mode === "json-ld") {
       expect(result.notesText).toBeNull();
@@ -458,7 +458,7 @@ describe("extractRecipeFromHtml recipe notes extraction", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(html, "https://example.com/rendang");
+    const result = extractUrlRecipe(html, "https://example.com/rendang");
     expect(result.mode).toBe("json-ld");
     if (result.mode === "json-ld") {
       expect(result.notesText).toContain("Note 1:");
@@ -467,7 +467,7 @@ describe("extractRecipeFromHtml recipe notes extraction", () => {
   });
 });
 
-describe("extractRecipeFromHtml YouTube video extraction", () => {
+describe("extractUrlRecipe YouTube video extraction", () => {
   it("extracts and normalizes a YouTube video from JSON-LD VideoObject embedUrl", () => {
     const html = `
       <html>
@@ -491,7 +491,7 @@ describe("extractRecipeFromHtml YouTube video extraction", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(html, "https://example.com/rendang");
+    const result = extractUrlRecipe(html, "https://example.com/rendang");
     expect(result.youtubeUrl).toBe(
       "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     );
@@ -521,7 +521,7 @@ describe("extractRecipeFromHtml YouTube video extraction", () => {
       </html>
     `;
 
-    const result = extractRecipeFromHtml(html, "https://example.com/soup");
+    const result = extractUrlRecipe(html, "https://example.com/soup");
     expect(result.youtubeUrl).toBe(
       "https://www.youtube.com/watch?v=AbC123_xyZ9",
     );
@@ -548,10 +548,10 @@ describe("extractRecipeFromHtml YouTube video extraction", () => {
     `;
 
     expect(
-      extractRecipeFromHtml(withVideo, "https://example.com/pasta").youtubeUrl,
+      extractUrlRecipe(withVideo, "https://example.com/pasta").youtubeUrl,
     ).toBe("https://www.youtube.com/watch?v=xYz98765432");
     expect(
-      extractRecipeFromHtml(withoutVideo, "https://example.com/toast").youtubeUrl,
+      extractUrlRecipe(withoutVideo, "https://example.com/toast").youtubeUrl,
     ).toBeNull();
   });
 });

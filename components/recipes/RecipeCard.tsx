@@ -7,12 +7,13 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import type { StructuredRecipe } from "@/lib/recipes/schema";
+import { THEMEALDB_URL } from "@/lib/recipes/mealdb";
 import RecipeStepsCollapsible from "./RecipeStepsCollapsible";
 import RecipeNotesCollapsible from "./RecipeNotesCollapsible";
 import RecipeImageModal from "./RecipeImageModal";
-import { FormattedIngredientText } from "./RecipeFormattedText";
+import { FormattedRecipeIngredient } from "./RecipeFormattedText";
 
-export interface RecipeCardProps {
+interface RecipeCardProps {
   recipe: StructuredRecipe;
 }
 
@@ -58,7 +59,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
           <RecipeImageModal
             src={source.thumbnailUrl}
             alt={title}
-            dishName={title}
+            title={title}
             sourceName={source.name}
             width={112}
             height={112}
@@ -140,7 +141,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                 className="flex items-start justify-between gap-2.5 rounded-xl border border-border/80 bg-background px-3.5 py-2.5 text-[15px] sm:text-base text-text"
               >
                 <span className="min-w-0 flex-1 leading-relaxed break-words">
-                  <FormattedIngredientText text={ing.item} />
+                  <FormattedRecipeIngredient text={ing.item} />
                 </span>
                 {ing.amount && (
                   <span className="mt-0.5 max-w-[45%] shrink-0 rounded-md border border-border bg-surface px-2 py-0.5 text-right text-xs font-semibold leading-snug break-words text-accent-strong">
@@ -215,11 +216,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-text-muted">
           <span>Recipe data and imagery:</span>
           <a
-            href={
-              source.name === "TheMealDB" && !source.url
-                ? "https://www.themealdb.com/"
-                : source.url
-            }
+            href={source.name === "TheMealDB" ? THEMEALDB_URL : source.url}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-medium text-accent-strong hover:underline focus-visible:outline-accent-strong"
@@ -233,12 +230,12 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
   );
 }
 
-export interface RecipeCardErrorProps {
-  mealName?: string;
+interface RecipeCardErrorProps {
+  title?: string;
   message: string;
 }
 
-export function RecipeCardError({ mealName, message }: RecipeCardErrorProps) {
+export function RecipeCardError({ title, message }: RecipeCardErrorProps) {
   return (
     <div
       role="alert"
@@ -248,7 +245,7 @@ export function RecipeCardError({ mealName, message }: RecipeCardErrorProps) {
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
         <div className="space-y-1">
           <h4 className="font-semibold text-warning">
-            {mealName ? `Unable to format recipe for "${mealName}"` : "Unable to format recipe"}
+            {title ? `Unable to format recipe for "${title}"` : "Unable to format recipe"}
           </h4>
           <p className="text-xs leading-relaxed text-text-muted">
             {message || "The recipe instructions could not be formatted into structured steps. Please try searching for another dish."}

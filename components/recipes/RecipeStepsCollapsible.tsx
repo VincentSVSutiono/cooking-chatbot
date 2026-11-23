@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FormattedRecipeStep } from "./RecipeFormattedText";
 import RecipeExpandButton from "./RecipeExpandButton";
 
-export interface RecipeStepsCollapsibleProps {
+interface RecipeStepsCollapsibleProps {
   steps: string[];
   initialVisibleCount?: number;
 }
