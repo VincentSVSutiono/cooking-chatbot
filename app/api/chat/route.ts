@@ -1,14 +1,37 @@
 import {
   convertToModelMessages,
+  createIdGenerator,
   createUIMessageStreamResponse,
   toUIMessageStream,
   streamText,
-  type UIMessage,
   isStepCount,
 } from "ai";
 import { getChatModel, COOKING_SYSTEM_PROMPT } from "@/config/ai";
-import { createCookingTools } from "@/lib/ai/tools";
+import { createCookingTools, type ChatMessage } from "@/lib/ai/tools";
+import { generateChatTitleSummary } from "@/lib/ai/title";
+import {
+  ensureChatExists,
+  extractFallbackChatTitle,
+  isValidUuid,
+  updateChatTitle,
+  upsertChatMessages,
+} from "@/lib/db/chats";
 import { validateMessageAttachments } from "@/lib/files/attachments";
+
+function parseValidChatId(value: unknown): string | null {
+  return typeof value === "string" && isValidUuid(value) ? value : null;
+}
+
+function extractUserMessageText(message: ChatMessage | undefined): string {
+  if (!message) {
+    return "";
+  }
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .trim();
+}
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -38,12 +61,13 @@ function isHighDemandError(error: unknown): boolean {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const messages: UIMessage[] = body?.messages;
+    const messages: ChatMessage[] = body?.messages;
     const requestedModel: string | undefined = body?.model;
+    const chatId = parseValidChatId(body?.chatId ?? body?.id);
 
-    if (!Array.isArray(messages)) {
+    if (!Array.isArray(messages) || messages.length === 0) {
       return Response.json(
-        { error: "Expected a messages array." },
+        { error: "Expected a non-empty messages array." },
         { status: 400 },
       );
     }
@@ -51,6 +75,26 @@ export async function POST(req: Request) {
     const attachmentError = validateMessageAttachments(messages);
     if (attachmentError) {
       return Response.json({ error: attachmentError }, { status: 422 });
+    }
+
+    const firstUserMessage =
+      messages.find((message) => message.role === "user") ?? messages[0];
+    const firstUserText = extractUserMessageText(firstUserMessage);
+    let isNewChat = false;
+
+    if (chatId) {
+      try {
+        const fallbackTitle = extractFallbackChatTitle(firstUserMessage);
+        const ensured = await ensureChatExists(chatId, fallbackTitle);
+        isNewChat = ensured.isNewChat;
+
+        const latestMessage = messages[messages.length - 1];
+        if (latestMessage?.role === "user") {
+          await upsertChatMessages(chatId, [latestMessage]);
+        }
+      } catch (dbError) {
+        console.error("Failed to pre-persist chat message:", dbError);
+      }
     }
 
     const modelMessages = await convertToModelMessages(messages);
@@ -86,8 +130,29 @@ export async function POST(req: Request) {
       },
     });
 
+    result.consumeStream();
+
     const uiStream = toUIMessageStream({
       stream: result.stream,
+      originalMessages: messages,
+      generateMessageId: createIdGenerator({ prefix: "msg", size: 16 }),
+      onEnd: chatId
+        ? async ({ messages: finalMessages }) => {
+            try {
+              await upsertChatMessages(chatId, finalMessages);
+
+              if (isNewChat) {
+                const summaryTitle =
+                  await generateChatTitleSummary(firstUserText);
+                if (summaryTitle) {
+                  await updateChatTitle(chatId, summaryTitle);
+                }
+              }
+            } catch (dbError) {
+              console.error("Failed to persist completed chat:", dbError);
+            }
+          }
+        : undefined,
       onError: (error) => {
         console.error("Chat stream error:", error);
         if (isQuotaError(error)) {
