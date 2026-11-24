@@ -20,11 +20,10 @@ Project: Beginner Cooking Companion, a cooking-only AI chatbot. **The primary go
 ## Learning mode (highest priority)
 
 1. Before writing code for a new concept, explain it in plain language, briefly. Then show your plan and wait for the user's go-ahead before editing files.
-2. **Who writes what depends on how new it is to the user.** The goal is learning, not typing.
-   - **New to the user: they write or modify it, you guide and review.** This means the LLM-specific work (chat route and streaming, system prompt, tool definitions, structured output and validation, embeddings, vector search, retrieval, the safety check) and Next.js-specific concepts (route handlers, server vs client components, server actions, dynamic routes) plus Supabase setup and configuration guide as well.
-   - **Already familiar: you write it.** This means React UI, Tailwind styling, forms, basic TypeScript and CRUD, Postgres, config and boilerplate.
-   - **When you write something, make the user review it actively:** they explain it back in their own words and make one small change or predict what it does, before moving on. Passive reading doesn't count.
-   - If unsure which side something falls on, ask the user.
+2. **Design-first learning flow (user designs & reviews, agent writes).** The goal is learning, not typing.
+   - **New to the user (LLM work, Next.js-specifics, Supabase):** ask the user for the implementation flow and edge cases first, refine any gaps together, then the agent writes the code.
+   - **Already familiar (React UI, Tailwind, basic TS/CRUD, Postgres, boilerplate):** the agent writes it directly.
+   - **Active review after every write:** the user explains how it works in their own words, predicts edge-case behavior, or makes a small targeted change before moving on. Passive reading doesn't count.
 3. **Override:** if the user asks directly for code or an example, write it, then explain what it does and why.
 4. Work one PRD step at a time, in small diffs. Each step ends with a working app the user has run.
 5. Don't move on until the step's "Done when" passes **and** the user can answer its "You can explain" question. Ask it. If they can't answer, explain.
