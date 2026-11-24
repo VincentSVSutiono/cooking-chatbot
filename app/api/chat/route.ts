@@ -12,26 +12,12 @@ import { generateChatTitleSummary } from "@/lib/ai/title";
 import {
   ensureChatExists,
   extractFallbackChatTitle,
-  isValidUuid,
+  extractMessageText,
+  parseValidChatId,
   updateChatTitle,
   upsertChatMessages,
 } from "@/lib/db/chats";
 import { validateMessageAttachments } from "@/lib/files/attachments";
-
-function parseValidChatId(value: unknown): string | null {
-  return typeof value === "string" && isValidUuid(value) ? value : null;
-}
-
-function extractUserMessageText(message: ChatMessage | undefined): string {
-  if (!message) {
-    return "";
-  }
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join(" ")
-    .trim();
-}
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -79,7 +65,7 @@ export async function POST(req: Request) {
 
     const firstUserMessage =
       messages.find((message) => message.role === "user") ?? messages[0];
-    const firstUserText = extractUserMessageText(firstUserMessage);
+    const firstUserText = extractMessageText(firstUserMessage);
     let isNewChat = false;
 
     if (chatId) {

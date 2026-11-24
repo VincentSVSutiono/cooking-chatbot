@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import type { FileUIPart } from "ai";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -12,8 +13,34 @@ import { DEFAULT_MODEL_ID, type ModelId } from "@/config/models";
 import type { NormalizedMealDbRecipe } from "@/lib/recipes/mealdb";
 import type { ChatMessage } from "@/lib/ai/tools";
 
-export default function ChatInterface() {
+interface ChatInterfaceProps {
+  initialChatId?: string;
+  initialMessages?: ChatMessage[];
+}
+
+function createChatId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+}
+
+export default function ChatInterface({
+  initialChatId,
+  initialMessages,
+}: ChatInterfaceProps) {
+  const router = useRouter();
   const [selectedModel, setSelectedModel] = useState<ModelId>(DEFAULT_MODEL_ID);
+  const activeChatIdRef = useRef<string | null>(initialChatId ?? null);
   const [chatSessionKey, setChatSessionKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -26,7 +53,15 @@ export default function ChatInterface() {
     regenerate,
     clearError,
     stop,
-  } = useChat<ChatMessage>();
+  } = useChat<ChatMessage>({
+    id: initialChatId,
+    messages: initialMessages,
+    onFinish: ({ isError, isAbort, isDisconnect }) => {
+      if (!isError && !isAbort && !isDisconnect) {
+        router.refresh();
+      }
+    },
+  });
 
   const isBusy = status === "submitted" || status === "streaming";
   const isQuotaError = error?.message?.includes("QUOTA_EXCEEDED") ?? false;
@@ -50,11 +85,30 @@ export default function ChatInterface() {
     text?: string;
     files?: FileUIPart[];
   }) {
-    if (text) {
-      sendMessage({ text, files }, { body: { model: selectedModel } });
-    } else if (files && files.length > 0) {
-      sendMessage({ files }, { body: { model: selectedModel } });
+    const hasFiles = Boolean(files && files.length > 0);
+    if (!text && !hasFiles) {
+      return;
     }
+
+    const resolvedChatId = activeChatIdRef.current ?? createChatId();
+    activeChatIdRef.current = resolvedChatId;
+
+    if (typeof window !== "undefined" && window.location.pathname === "/") {
+      window.history.replaceState(null, "", `/chat/${resolvedChatId}`);
+    }
+
+    const requestBody = { model: selectedModel, chatId: resolvedChatId };
+    if (text) {
+      sendMessage({ text, files }, { body: requestBody });
+    } else if (files && files.length > 0) {
+      sendMessage({ files }, { body: requestBody });
+    }
+  }
+
+  function handleRetry() {
+    const resolvedChatId = activeChatIdRef.current ?? createChatId();
+    activeChatIdRef.current = resolvedChatId;
+    regenerate({ body: { model: selectedModel, chatId: resolvedChatId } });
   }
 
   function handleSelectRecipe(recipe: NormalizedMealDbRecipe) {
@@ -69,7 +123,11 @@ export default function ChatInterface() {
     stop();
     clearError();
     setMessages([]);
+    activeChatIdRef.current = null;
     setChatSessionKey((prev) => prev + 1);
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      router.push("/");
+    }
   }
 
   return (
@@ -82,7 +140,12 @@ export default function ChatInterface() {
     >
       <ChatHeader
         onNewChat={handleNewChat}
-        canNewChat={messages.length > 0 || Boolean(error) || isBusy}
+        canNewChat={
+          messages.length > 0 ||
+          Boolean(error) ||
+          isBusy ||
+          Boolean(initialChatId)
+        }
       />
 
       <main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 md:px-8 pt-3 sm:pt-6 pb-4 sm:pb-6 max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden sm:[scrollbar-gutter:stable_both-edges]">
@@ -184,7 +247,7 @@ export default function ChatInterface() {
 
               <button
                 type="button"
-                onClick={() => regenerate({ body: { model: selectedModel } })}
+                onClick={handleRetry}
                 className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-warning px-4 py-2 text-sm font-medium text-warning transition-colors hover:bg-user-message focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-warning disabled:cursor-not-allowed"
               >
                 Try again

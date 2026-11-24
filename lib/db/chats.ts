@@ -27,6 +27,14 @@ export function isValidUuid(value: string): boolean {
 }
 
 /**
+ * Validates and narrows an untrusted input (e.g. request body field) to a
+ * valid UUID v4 chat ID string, or returns `null`.
+ */
+export function parseValidChatId(value: unknown): string | null {
+  return typeof value === "string" && isValidUuid(value) ? value : null;
+}
+
+/**
  * Converts an AI SDK `ChatMessage` into a Postgres `public.messages` record.
  */
 export function toMessageDB(
@@ -68,6 +76,24 @@ function formatUrlForTitle(rawUrl: string): string {
 }
 
 /**
+ * Extracts normalized plain text from a message's text parts.
+ */
+export function extractMessageText(
+  message: Pick<ChatMessage, "parts"> | undefined,
+): string {
+  if (!message) {
+    return "";
+  }
+
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Builds a clean deterministic fallback title (~50 chars max) from the first
  * user message so new chats always have a readable title even if LLM title
  * summarization is skipped or hits a rate limit.
@@ -75,12 +101,7 @@ function formatUrlForTitle(rawUrl: string): string {
 export function extractFallbackChatTitle(
   message: Pick<ChatMessage, "parts">,
 ): string {
-  const rawText = message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const rawText = extractMessageText(message);
 
   if (!rawText) {
     return "Photo / Recipe Upload";

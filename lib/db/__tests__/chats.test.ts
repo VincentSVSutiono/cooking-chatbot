@@ -5,6 +5,8 @@ vi.mock("server-only", () => ({}));
 import type { ChatMessage } from "@/lib/ai/tools";
 import {
   isValidUuid,
+  parseValidChatId,
+  extractMessageText,
   extractFallbackChatTitle,
   toMessageDB,
   toChatMessage,
@@ -25,6 +27,56 @@ describe("isValidUuid", () => {
     expect(isValidUuid("550e8400-e29b-41d4-a716-446655440000/../admin")).toBe(
       false,
     );
+  });
+});
+
+describe("parseValidChatId", () => {
+  it("returns the chat ID string when given a valid v4 UUID", () => {
+    const id = "550e8400-e29b-41d4-a716-446655440000";
+    expect(parseValidChatId(id)).toBe(id);
+  });
+
+  it("returns null for non-strings or invalid UUID values", () => {
+    expect(parseValidChatId(undefined)).toBeNull();
+    expect(parseValidChatId(null)).toBeNull();
+    expect(parseValidChatId(12345)).toBeNull();
+    expect(parseValidChatId({})).toBeNull();
+    expect(parseValidChatId("not-a-uuid")).toBeNull();
+  });
+});
+
+describe("extractMessageText", () => {
+  it("joins and normalizes whitespace across text parts", () => {
+    const text = extractMessageText({
+      parts: [
+        { type: "text", text: "  How do I   simmer\n" },
+        {
+          type: "file",
+          mediaType: "image/jpeg",
+          filename: "pot.jpg",
+          url: "data:image/jpeg;base64,abc",
+        },
+        { type: "text", text: "  tomato sauce?  " },
+      ],
+    });
+
+    expect(text).toBe("How do I simmer tomato sauce?");
+  });
+
+  it("returns an empty string for undefined or file-only messages", () => {
+    expect(extractMessageText(undefined)).toBe("");
+    expect(
+      extractMessageText({
+        parts: [
+          {
+            type: "file",
+            mediaType: "image/png",
+            filename: "fridge.png",
+            url: "data:image/png;base64,abc",
+          },
+        ],
+      }),
+    ).toBe("");
   });
 });
 
