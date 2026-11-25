@@ -20,7 +20,7 @@ export default function ChatError({ error, retry, reset }: ChatErrorProps) {
   }
 
   return (
-    <main className="flex min-h-dvh w-full items-center justify-center bg-background px-4 py-8 text-text sm:px-6">
+    <main className="flex h-full w-full items-center justify-center overflow-y-auto bg-background px-4 py-8 text-text sm:px-6">
       <section
         role="alert"
         aria-labelledby="chat-error-heading"

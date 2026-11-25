@@ -1,5 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
+import ChatShell from "@/components/chat/ChatShell";
+import { ChatSidebarSkeleton } from "@/components/chat/ChatSidebar";
+import ChatSidebarServer from "@/components/chat/ChatSidebarServer";
 import "./globals.css";
 
 const inter = Inter({
@@ -31,7 +35,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${fraunces.variable} h-full overflow-x-hidden font-sans antialiased`}
     >
-      <body className="h-full overflow-x-hidden overflow-y-hidden flex flex-col">{children}</body>
+      <body className="h-full overflow-x-hidden overflow-y-hidden flex flex-col">
+        <ChatShell
+          sidebar={
+            <Suspense fallback={<ChatSidebarSkeleton />}>
+              <ChatSidebarServer />
+            </Suspense>
+          }
+        >
+          {children}
+        </ChatShell>
+      </body>
     </html>
   );
 }

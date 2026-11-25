@@ -3,7 +3,7 @@ import { ArrowLeft, UtensilsCrossed } from "lucide-react";
 
 export default function ChatNotFound() {
   return (
-    <main className="flex min-h-dvh w-full items-center justify-center bg-background px-4 py-8 text-text sm:px-6">
+    <main className="flex h-full w-full items-center justify-center overflow-y-auto bg-background px-4 py-8 text-text sm:px-6">
       <section
         aria-labelledby="chat-not-found-heading"
         className="flex w-full max-w-lg flex-col items-start gap-5 rounded-xl border border-border bg-surface p-5 sm:p-7"

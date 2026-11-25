@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import {
   convertToModelMessages,
   createIdGenerator,
@@ -8,16 +9,14 @@ import {
 } from "ai";
 import { getChatModel, COOKING_SYSTEM_PROMPT } from "@/config/ai";
 import { createCookingTools, type ChatMessage } from "@/lib/ai/tools";
-import { generateChatTitleSummary } from "@/lib/ai/title";
-import {
-  ensureChatExists,
-  extractFallbackChatTitle,
-  extractMessageText,
-  parseValidChatId,
-  updateChatTitle,
-  upsertChatMessages,
-} from "@/lib/db/chats";
+import { parseValidChatId } from "@/lib/db/chats";
+import { startSaveChat } from "@/lib/db/save-chat";
 import { validateMessageAttachments } from "@/lib/files/attachments";
+
+const QUOTA_ERROR_MESSAGE =
+  "QUOTA_EXCEEDED: This model has reached its rate limit or daily quota. Please switch to another model using the selector below, then click Try again.";
+const OVERLOADED_ERROR_MESSAGE =
+  "MODEL_OVERLOADED: This model is currently experiencing high demand. Please switch to another model using the selector below or click Try again in a moment.";
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -44,6 +43,19 @@ function isHighDemandError(error: unknown): boolean {
   );
 }
 
+function classifyChatError(error: unknown): {
+  status: 429 | 503 | 500;
+  clientMessage: string | null;
+} {
+  if (isQuotaError(error)) {
+    return { status: 429, clientMessage: QUOTA_ERROR_MESSAGE };
+  }
+  if (isHighDemandError(error)) {
+    return { status: 503, clientMessage: OVERLOADED_ERROR_MESSAGE };
+  }
+  return { status: 500, clientMessage: null };
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -63,24 +75,10 @@ export async function POST(req: Request) {
       return Response.json({ error: attachmentError }, { status: 422 });
     }
 
-    const firstUserMessage =
-      messages.find((message) => message.role === "user") ?? messages[0];
-    const firstUserText = extractMessageText(firstUserMessage);
-    let isNewChat = false;
-
-    if (chatId) {
-      try {
-        const fallbackTitle = extractFallbackChatTitle(firstUserMessage);
-        const ensured = await ensureChatExists(chatId, fallbackTitle);
-        isNewChat = ensured.isNewChat;
-
-        const latestMessage = messages[messages.length - 1];
-        if (latestMessage?.role === "user") {
-          await upsertChatMessages(chatId, [latestMessage]);
-        }
-      } catch (dbError) {
-        console.error("Failed to pre-persist chat message:", dbError);
-      }
+    const savedChat = await startSaveChat(chatId, messages);
+    const backgroundTask = savedChat?.backgroundTask;
+    if (backgroundTask) {
+      after(() => backgroundTask);
     }
 
     const modelMessages = await convertToModelMessages(messages);
@@ -122,32 +120,13 @@ export async function POST(req: Request) {
       stream: result.stream,
       originalMessages: messages,
       generateMessageId: createIdGenerator({ prefix: "msg", size: 16 }),
-      onEnd: chatId
-        ? async ({ messages: finalMessages }) => {
-            try {
-              await upsertChatMessages(chatId, finalMessages);
-
-              if (isNewChat) {
-                const summaryTitle =
-                  await generateChatTitleSummary(firstUserText);
-                if (summaryTitle) {
-                  await updateChatTitle(chatId, summaryTitle);
-                }
-              }
-            } catch (dbError) {
-              console.error("Failed to persist completed chat:", dbError);
-            }
-          }
-        : undefined,
+      onEnd: savedChat?.onStreamEnd,
       onError: (error) => {
         console.error("Chat stream error:", error);
-        if (isQuotaError(error)) {
-          return "QUOTA_EXCEEDED: This model has reached its rate limit or daily quota. Please switch to another model using the selector below, then click Try again.";
-        }
-        if (isHighDemandError(error)) {
-          return "MODEL_OVERLOADED: This model is currently experiencing high demand. Please switch to another model using the selector below or click Try again in a moment.";
-        }
-        return "Couldn't reach the cooking assistant. Please try again.";
+        return (
+          classifyChatError(error).clientMessage ??
+          "Couldn't reach the cooking assistant. Please try again."
+        );
       },
     });
 
@@ -156,27 +135,10 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("POST /api/chat error:", error);
-    if (isQuotaError(error)) {
-      return Response.json(
-        {
-          error:
-            "QUOTA_EXCEEDED: This model has reached its rate limit or daily quota. Please switch to another model using the selector below, then click Try again.",
-        },
-        { status: 429 },
-      );
-    }
-    if (isHighDemandError(error)) {
-      return Response.json(
-        {
-          error:
-            "MODEL_OVERLOADED: This model is currently experiencing high demand. Please switch to another model using the selector below or click Try again in a moment.",
-        },
-        { status: 503 },
-      );
-    }
+    const { status, clientMessage } = classifyChatError(error);
     return Response.json(
-      { error: "Failed to process chat request." },
-      { status: 500 },
+      { error: clientMessage ?? "Failed to process chat request." },
+      { status },
     );
   }
 }

@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  type RefObject,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import type { FileUIPart } from "ai";
@@ -8,6 +15,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import ChatHeader from "./ChatHeader";
 import ChatInputBar from "./ChatInputBar";
 import ChatMessageItem from "./ChatMessageItem";
+import { useSidebar } from "./ChatShell";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import { DEFAULT_MODEL_ID, type ModelId } from "@/config/models";
 import type { NormalizedMealDbRecipe } from "@/lib/recipes/mealdb";
@@ -39,9 +47,9 @@ export default function ChatInterface({
   initialMessages,
 }: ChatInterfaceProps) {
   const router = useRouter();
+  const { registerNewChatHandler, refreshChats } = useSidebar();
   const [selectedModel, setSelectedModel] = useState<ModelId>(DEFAULT_MODEL_ID);
   const activeChatIdRef = useRef<string | null>(initialChatId ?? null);
-  const [chatSessionKey, setChatSessionKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -58,15 +66,21 @@ export default function ChatInterface({
     messages: initialMessages,
     onFinish: ({ isError, isAbort, isDisconnect }) => {
       if (!isError && !isAbort && !isDisconnect) {
-        router.refresh();
+        void refreshChats();
       }
     },
   });
 
+  const { chatSessionKey, resetChatState } = useChatReset({
+    initialChatId,
+    activeChatIdRef,
+    registerNewChatHandler,
+    stop,
+    clearError,
+    setMessages,
+  });
+
   const isBusy = status === "submitted" || status === "streaming";
-  const isQuotaError = error?.message?.includes("QUOTA_EXCEEDED") ?? false;
-  const isOverloadedError =
-    error?.message?.includes("MODEL_OVERLOADED") ?? false;
   const isAwaitingAssistantStart =
     isBusy &&
     messages.length > 0 &&
@@ -120,24 +134,14 @@ export default function ChatInterface({
   }
 
   function handleNewChat() {
-    stop();
-    clearError();
-    setMessages([]);
-    activeChatIdRef.current = null;
-    setChatSessionKey((prev) => prev + 1);
+    resetChatState();
     if (typeof window !== "undefined" && window.location.pathname !== "/") {
       router.push("/");
     }
   }
 
   return (
-    <div
-      className="relative flex h-full w-full flex-col bg-background text-text overflow-hidden"
-      style={{
-        height: "var(--app-viewport-height, 100dvh)",
-        top: "var(--app-viewport-top, 0px)",
-      }}
-    >
+    <div className="relative flex h-full w-full flex-col bg-background text-text overflow-hidden">
       <ChatHeader
         onNewChat={handleNewChat}
         canNewChat={
@@ -166,36 +170,20 @@ export default function ChatInterface({
               aria-label="Chat conversation"
               className="flex flex-col gap-6"
             >
-              {messages.map((message, messageIndex) => {
-                const isLastMessage = messageIndex === messages.length - 1;
-                const hasTextPart = message.parts.some(
-                  (p) => p.type === "text" && p.text.trim().length > 0,
-                );
-                const hasActiveTool = message.parts.some(
-                  (p) =>
-                    p.type.startsWith("tool-") &&
-                    "state" in p &&
-                    (p.state === "input-streaming" ||
-                      p.state === "input-available"),
-                );
-                const isAwaitingText =
-                  isLastMessage &&
-                  isBusy &&
-                  !hasTextPart &&
-                  !hasActiveTool &&
-                  message.role !== "user";
-
-                return (
-                  <ChatMessageItem
-                    key={message.id}
-                    message={message}
-                    isAwaitingText={isAwaitingText}
-                    isBusy={isBusy}
-                    onSelectRecipe={handleSelectRecipe}
-                    onImportUrl={handleImportUrl}
-                  />
-                );
-              })}
+              {messages.map((message, messageIndex) => (
+                <ChatMessageItem
+                  key={message.id}
+                  message={message}
+                  isAwaitingText={isMessageAwaitingText(
+                    message,
+                    messageIndex === messages.length - 1,
+                    isBusy,
+                  )}
+                  isBusy={isBusy}
+                  onSelectRecipe={handleSelectRecipe}
+                  onImportUrl={handleImportUrl}
+                />
+              ))}
 
               {isAwaitingAssistantStart && (
                 <article className="flex flex-col w-full min-w-0 items-start">
@@ -217,43 +205,7 @@ export default function ChatInterface({
             </div>
           )}
 
-          {error && (
-            <div
-              role="alert"
-              className="flex flex-col gap-3 rounded-xl border border-warning bg-surface p-4 text-text sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex items-start gap-3">
-                <AlertCircle
-                  className="mt-0.5 h-5 w-5 shrink-0 text-warning"
-                  aria-hidden="true"
-                />
-                <div className="space-y-1">
-                  <p className="font-medium text-warning">
-                    {isQuotaError
-                      ? "Model rate limit or quota reached"
-                      : isOverloadedError
-                        ? "Model is temporarily busy"
-                        : "Something went wrong in the kitchen"}
-                  </p>
-                  <p className="text-sm leading-relaxed text-text-muted">
-                    {isQuotaError
-                      ? "This model has reached its rate limit or daily quota. Please switch to another model using the selector in the input bar below, then click Try again."
-                      : isOverloadedError
-                        ? "This model is currently experiencing high demand. Please switch to another model using the selector in the input bar below, or click Try again in a moment."
-                        : "We couldn't reach the cooking assistant right now. Please check your connection or switch models and try again."}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-warning px-4 py-2 text-sm font-medium text-warning transition-colors hover:bg-user-message focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-warning disabled:cursor-not-allowed"
-              >
-                Try again
-              </button>
-            </div>
-          )}
+          {error && <ChatErrorBanner error={error} onRetry={handleRetry} />}
 
           <div ref={messagesEndRef} />
         </div>
@@ -267,6 +219,135 @@ export default function ChatInterface({
         selectedModel={selectedModel}
         onSelectModel={setSelectedModel}
       />
+    </div>
+  );
+}
+
+interface UseChatResetOptions {
+  initialChatId?: string;
+  activeChatIdRef: RefObject<string | null>;
+  registerNewChatHandler: (handler: () => void) => () => void;
+  stop: () => void;
+  clearError: () => void;
+  setMessages: (messages: ChatMessage[]) => void;
+}
+
+function useChatReset({
+  initialChatId,
+  activeChatIdRef,
+  registerNewChatHandler,
+  stop,
+  clearError,
+  setMessages,
+}: UseChatResetOptions) {
+  const [chatSessionKey, setChatSessionKey] = useState(0);
+
+  const resetChatState = useCallback(() => {
+    stop();
+    clearError();
+    setMessages([]);
+    activeChatIdRef.current = null;
+    setChatSessionKey((prev) => prev + 1);
+  }, [stop, clearError, setMessages, activeChatIdRef]);
+
+  const resetChatStateRef = useRef(resetChatState);
+
+  useEffect(() => {
+    resetChatStateRef.current = resetChatState;
+  }, [resetChatState]);
+
+  // Next.js Cache Components hides visited routes with React <Activity> instead of
+  // unmounting them; clear a chat started on `/` once `/` becomes hidden.
+  useLayoutEffect(() => {
+    if (initialChatId) {
+      return;
+    }
+    return () => {
+      if (activeChatIdRef.current !== null) {
+        resetChatStateRef.current();
+      }
+    };
+  }, [initialChatId, activeChatIdRef]);
+
+  useEffect(() => {
+    if (initialChatId) {
+      return;
+    }
+    return registerNewChatHandler(resetChatState);
+  }, [initialChatId, registerNewChatHandler, resetChatState]);
+
+  return { chatSessionKey, resetChatState };
+}
+
+function isMessageAwaitingText(
+  message: ChatMessage,
+  isLastMessage: boolean,
+  isBusy: boolean,
+): boolean {
+  if (!isLastMessage || !isBusy || message.role === "user") {
+    return false;
+  }
+
+  const hasTextPart = message.parts.some(
+    (p) => p.type === "text" && p.text.trim().length > 0,
+  );
+  const hasActiveTool = message.parts.some(
+    (p) =>
+      p.type.startsWith("tool-") &&
+      "state" in p &&
+      (p.state === "input-streaming" || p.state === "input-available"),
+  );
+
+  return !hasTextPart && !hasActiveTool;
+}
+
+interface ChatErrorBannerProps {
+  error: Error;
+  onRetry: () => void;
+}
+
+function ChatErrorBanner({ error, onRetry }: ChatErrorBannerProps) {
+  const isQuotaError = error.message?.includes("QUOTA_EXCEEDED") ?? false;
+  const isOverloadedError =
+    error.message?.includes("MODEL_OVERLOADED") ?? false;
+
+  const title = isQuotaError
+    ? "Model rate limit or quota reached"
+    : isOverloadedError
+      ? "Model is temporarily busy"
+      : "Something went wrong in the kitchen";
+
+  const description = isQuotaError
+    ? "This model has reached its rate limit or daily quota. Please switch to another model using the selector in the input bar below, then click Try again."
+    : isOverloadedError
+      ? "This model is currently experiencing high demand. Please switch to another model using the selector in the input bar below, or click Try again in a moment."
+      : "We couldn't reach the cooking assistant right now. Please check your connection or switch models and try again.";
+
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-3 rounded-xl border border-warning bg-surface p-4 text-text sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex items-start gap-3">
+        <AlertCircle
+          className="mt-0.5 h-5 w-5 shrink-0 text-warning"
+          aria-hidden="true"
+        />
+        <div className="space-y-1">
+          <p className="font-medium text-warning">{title}</p>
+          <p className="text-sm leading-relaxed text-text-muted">
+            {description}
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-warning px-4 py-2 text-sm font-medium text-warning transition-colors hover:bg-user-message focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-warning disabled:cursor-not-allowed"
+      >
+        Try again
+      </button>
     </div>
   );
 }

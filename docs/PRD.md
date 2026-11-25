@@ -54,12 +54,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 4: Link import, web search, and file/image uploads — Done (SSRF-safe URL import with JSON-LD/notes/YouTube extraction in `lib/recipes/url-import.ts`, optional `notes` in `lib/recipes/schema.ts`, Tavily `webSearch` tool & `/extract` fallback in `lib/ai/tavily.ts`, multimodal upload resizing & server MIME validation in `lib/files/attachments.ts` & `app/api/chat/route.ts`, source footers & `RecipeNotesCollapsible` in UI).
 
-### [ ] Step 5a: Supabase and saved chats
-- **Build:** a Supabase project, tables for chats and messages, a sidebar of past chats, and a `/chat/[id]` route with loading and error states.
-- **Skills:** `supabase` (install), `frontend-ui-engineering`.
-- **Read first:** Next.js: dynamic routes, server actions, loading and error UI. Supabase: its Next.js integration docs (via the `supabase` skill or Context7).
-- **Done when:** refreshing keeps the conversation. Past chats list in the sidebar. `/chat/[id]` opens the right chat. Deleting a chat works. Database credentials are only in `.env`. Any Supabase MCP access is read-only.
-- **You can explain:** why we store messages when the model is stateless. How a dynamic route works. When to use a server action vs a route handler. What happens to our data if Supabase pauses.
+### [x] Step 5a: Supabase and saved chats — Done (Supabase Postgres `chats` & `messages` tables in `lib/db/chats.ts`, per-turn `startSaveChat` + background `gemini-3.1-flash-lite` title summary in `lib/db/save-chat.ts` & `lib/ai/title.ts`, `/chat/[id]` route with `loading`/`error`/`not-found`, responsive `ChatShell` + `ChatSidebarServer` + `ChatSidebar` portal delete modal using `useDialogFocusTrap`, and `deleteChatAction`/`listChatsAction` Server Actions in `lib/db/actions.ts`).
 
 ### [ ] Step 5b: Recipes in the database and vector search
 - **Build:** an import script that copies TheMealDB recipes (official endpoints) into Supabase, an embedding model (chosen here), embeddings for every recipe, vector search replacing the live TheMealDB calls from step 2, and the option to save a validated web-imported recipe (`importUrlRecipe`) + its embedding into the database.
@@ -84,6 +79,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ## 7. Changes log
 
+- 2026-11-25: Completed Step 5a (Supabase Postgres `chats`/`messages` persistence, `/chat/[id]` dynamic route with loading/error/not-found states, parallel LLM title summarization with deterministic fallback, responsive `ChatShell` sidebar with `deleteChatAction` & `listChatsAction`, and portal delete confirmation modal).
 - 2026-11-21: Added saving validated web-imported recipes (`importUrlRecipe`) + embeddings to Supabase in Step 5b so the recipe database grows over time without re-searching the web.
 - 2026-11-15: Completed Step 4 (link import with SSRF guards, recipe notes & YouTube video extraction; switched web search from Google Search Grounding to Tavily due to 0 free-tier quota; client-side image resize and server attachment validation).
 - 2026-11-11: Completed Step 3 (Structured recipe schema, output validation with Vitest tests, two-step tool flow with compact match previews, full `<RecipeCard />` with dynamic attribution and photo modal lightbox, component separation and `lib/ai/types.ts`).

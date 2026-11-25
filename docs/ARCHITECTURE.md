@@ -20,6 +20,12 @@ Keep files grouped by **domain/feature**, not by generic technical bucket (avoid
 - `lib/ai/`
   - `tools.ts` — thin glue defining AI SDK tools (`createCookingTools`) and deriving all UI tool/message types via `InferUITools` (`CookingTools`, `ChatMessage`, `CookingToolPart`, `RecipeCardToolPart`). **Do not create manual duplicate part-type files** (replaces deleted `lib/ai/types.ts`).
   - `tavily.ts` — external Tavily API client (`/search`, `/extract`), named after the service it wraps.
+  - `title.ts` — `gemini-3.1-flash-lite` 3–5 word chat title summarizer (`generateChatTitleSummary`).
+- `lib/db/` — Supabase persistence, chat-turn coordination, and Server Actions:
+  - `client.ts` — singleton server-only Supabase admin client (`getSupabaseAdminClient`).
+  - `chats.ts` — Postgres `chats`/`messages` CRUD, UUID validation, message mapping, and fallback title generation.
+  - `save-chat.ts` — per-turn `startSaveChat` orchestrator (pre-stream save + background title with 1.5s stream-end cap).
+  - `actions.ts` — `"use server"` Server Actions (`deleteChatAction`, `listChatsAction`).
 - `lib/recipes/` — recipe pipeline split by stage:
   - `schema.ts` — Zod schemas & validation (`StructuredRecipe`, `validateRecipe`).
   - `mealdb.ts` — external TheMealDB API client & normalizer (`NormalizedMealDbRecipe`).
@@ -31,8 +37,11 @@ Keep files grouped by **domain/feature**, not by generic technical bucket (avoid
 - **Tests:** co-located in `__tests__/` inside each domain folder (`lib/ai/__tests__/`, `lib/recipes/__tests__/`), named `<module>.test.ts` matching the file under test.
 
 ### `components/` — React UI grouped by what it renders
-- `components/chat/` — conversation shell & chat primitives (`ChatInterface`, `ChatHeader`, `ChatWelcomeScreen`, `ChatInputBar`, `ChatMessageItem`, `ToolStatusPill`).
+- `components/chat/` — conversation shell & chat primitives (`ChatShell`, `ChatSidebarServer`, `ChatSidebar`, `ChatInterface`, `ChatHeader`, `ChatWelcomeScreen`, `ChatInputBar`, `ChatMessageItem`, `ToolStatusPill`).
 - `components/recipes/` — **all** `Recipe*` components (`RecipeCard`, `RecipeMatchList`, `RecipeAttribution`, `RecipeImageModal`, `RecipeStepsCollapsible`, `RecipeNotesCollapsible`, `RecipeExpandButton`, `RecipeFormattedText`). Group by what the component displays, not where it was first imported.
+
+### `hooks/` — Generic `"use client"` browser/DOM hooks
+- Reusable DOM-only hooks with no app/AI/DB coupling: `useAutogrowTextarea.ts`, `useVisualViewport.ts`, `useDialogFocusTrap.ts`. Keep feature-specific hooks local to their owning component.
 
 ---
 

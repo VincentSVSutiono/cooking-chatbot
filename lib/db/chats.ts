@@ -246,20 +246,20 @@ export async function upsertChatMessages(
     toMessageDB(chatId, message, new Date(baseTime + index).toISOString()),
   );
 
-  const { error: upsertError } = await supabase
-    .from("messages")
-    .upsert(rows, { onConflict: "id" });
+  const [{ error: upsertError }, { error: chatUpdateError }] =
+    await Promise.all([
+      supabase.from("messages").upsert(rows, { onConflict: "id" }),
+      supabase
+        .from("chats")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", chatId),
+    ]);
 
   if (upsertError) {
     throw new Error(
       `Failed to save messages for chat ${chatId}: ${upsertError.message}`,
     );
   }
-
-  const { error: chatUpdateError } = await supabase
-    .from("chats")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", chatId);
 
   if (chatUpdateError) {
     throw new Error(
