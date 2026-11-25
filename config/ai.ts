@@ -2,10 +2,17 @@ import "server-only";
 import { google } from "@ai-sdk/google";
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, type ModelId } from "./models";
 
+export const EMBEDDING_MODEL_ID = "gemini-embedding-2" as const;
+export const EMBEDDING_DIMENSIONS = 768 as const;
+
 export function getChatModel(modelId?: string) {
   const isValid = AVAILABLE_MODELS.includes(modelId as ModelId);
   const selected = isValid ? (modelId as ModelId) : DEFAULT_MODEL_ID;
   return google(selected);
+}
+
+export function getEmbeddingModel() {
+  return google.embedding(EMBEDDING_MODEL_ID);
 }
 
 export const COOKING_SYSTEM_PROMPT = `You are a Beginner Cooking Companion, a warm, patient, and practical kitchen guide for someone learning to cook from scratch.
