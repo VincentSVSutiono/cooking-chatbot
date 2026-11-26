@@ -15,6 +15,9 @@ export interface NormalizedMealDbRecipe {
   thumbnailUrl: string | null;
   sourceUrl: string;
   youtubeUrl: string | null;
+  sourceName?: string;
+  creditText?: string;
+  similarity?: number;
 }
 
 export interface SearchRecipesOutput {

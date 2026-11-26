@@ -129,6 +129,22 @@ export async function embedRecipeDocument(
   return embedSingleText(formatted, "RETRIEVAL_DOCUMENT", options);
 }
 
+export async function embedSearchQuery(
+  query: string,
+  options?: EmbedderOptions,
+): Promise<number[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    throw new Error("Cannot embed an empty search query.");
+  }
+
+  return embedSingleText(trimmed, "RETRIEVAL_QUERY", options);
+}
+
+// ============================================================================
+// CLI Seeding Helper (not called by the live chat app)
+// ============================================================================
+
 export async function embedRecipeDocumentsBatch(
   recipes: EmbeddingRecipeInput[],
   options?: EmbedderOptions,
@@ -160,16 +176,4 @@ export async function embedRecipeDocumentsBatch(
   }
 
   return rawVectors.map((vector) => normalizeVector(vector));
-}
-
-export async function embedSearchQuery(
-  query: string,
-  options?: EmbedderOptions,
-): Promise<number[]> {
-  const trimmed = query.trim();
-  if (!trimmed) {
-    throw new Error("Cannot embed an empty search query.");
-  }
-
-  return embedSingleText(trimmed, "RETRIEVAL_QUERY", options);
 }

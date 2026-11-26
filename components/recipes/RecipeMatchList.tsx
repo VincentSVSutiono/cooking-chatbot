@@ -44,7 +44,7 @@ export default function RecipeMatchList({
                   src={recipe.thumbnailUrl}
                   alt={recipe.title}
                   title={recipe.title}
-                  sourceName="TheMealDB"
+                  sourceName={recipe.sourceName ?? "TheMealDB"}
                   width={56}
                   height={56}
                   className="h-14 w-14 shrink-0"
@@ -74,6 +74,8 @@ export default function RecipeMatchList({
                     </span>
                   )}
                   <span>{recipe.ingredients.length} ingredients</span>
+                  <span aria-hidden="true">&middot;</span>
+                  <span>{recipe.sourceName ?? "TheMealDB"}</span>
                 </div>
               </div>
             </div>

@@ -41,7 +41,9 @@ function resolveToolPill(
       if (isLoading) {
         return {
           isError: false,
-          label: `Searching TheMealDB for "${query || "recipes"}"…`,
+          label: query
+            ? `Searching recipes for "${query}"…`
+            : "Searching for recipes…",
           SuccessIcon: Search,
         };
       }
@@ -78,8 +80,7 @@ function resolveToolPill(
 
       const isError =
         isStreamError ||
-        output?.status === "validation-error" ||
-        output?.status === "not-found";
+        (output !== undefined && output.status !== "success");
 
       return {
         isError,

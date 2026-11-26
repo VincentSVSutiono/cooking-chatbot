@@ -62,69 +62,9 @@ export function toChatMessage(row: MessageDB): ChatMessage {
   };
 }
 
-const MAX_FALLBACK_TITLE_LENGTH = 50;
-const FILLER_PREFIX_REGEX =
-  /^(?:(?:hey|hi|hello)[,\s]+)?(?:can you|could you|would you|please)(?:\s+(?:please|help me|show me|tell me|give me))?(?:\s+(?:how to|to))?(?:\s+(?:make|cook|bake|prepare))?\s+/i;
-
-function formatUrlForTitle(rawUrl: string): string {
-  try {
-    const parsed = new URL(rawUrl);
-    return parsed.hostname.replace(/^www\./i, "") || "link";
-  } catch {
-    return "link";
-  }
-}
-
-/**
- * Extracts normalized plain text from a message's text parts.
- */
-export function extractMessageText(
-  message: Pick<ChatMessage, "parts"> | undefined,
-): string {
-  if (!message) {
-    return "";
-  }
-
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Builds a clean deterministic fallback title (~50 chars max) from the first
- * user message so new chats always have a readable title even if LLM title
- * summarization is skipped or hits a rate limit.
- */
-export function extractFallbackChatTitle(
-  message: Pick<ChatMessage, "parts">,
-): string {
-  const rawText = extractMessageText(message);
-
-  if (!rawText) {
-    return "Photo / Recipe Upload";
-  }
-
-  const withoutUrls = rawText
-    .replace(/https?:\/\/\S+/gi, formatUrlForTitle)
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const withoutFiller = withoutUrls.replace(FILLER_PREFIX_REGEX, "").trim();
-  const baseTitle = withoutFiller || withoutUrls;
-  const capitalized = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
-
-  if (capitalized.length <= MAX_FALLBACK_TITLE_LENGTH) {
-    return capitalized;
-  }
-
-  const slice = capitalized.slice(0, MAX_FALLBACK_TITLE_LENGTH - 3);
-  const lastSpace = slice.lastIndexOf(" ");
-  const cut = lastSpace > 20 ? slice.slice(0, lastSpace) : slice;
-  return `${cut.replace(/[,\s.;:!?-]+$/g, "")}...`;
-}
+// ============================================================================
+// Postgres CRUD Queries (public.chats & public.messages)
+// ============================================================================
 
 /**
  * Lists saved chats ordered by most recent activity (`updated_at DESC`).
@@ -314,4 +254,72 @@ export async function deleteChatById(chatId: string): Promise<void> {
   if (error) {
     throw new Error(`Failed to delete chat ${chatId}: ${error.message}`);
   }
+}
+
+// ============================================================================
+// Fallback Title Helpers (used when LLM title generation is skipped or fails)
+// ============================================================================
+
+const MAX_FALLBACK_TITLE_LENGTH = 50;
+const FILLER_PREFIX_REGEX =
+  /^(?:(?:hey|hi|hello)[,\s]+)?(?:can you|could you|would you|please)(?:\s+(?:please|help me|show me|tell me|give me))?(?:\s+(?:how to|to))?(?:\s+(?:make|cook|bake|prepare))?\s+/i;
+
+function formatUrlForTitle(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.replace(/^www\./i, "") || "link";
+  } catch {
+    return "link";
+  }
+}
+
+/**
+ * Extracts normalized plain text from a message's text parts.
+ */
+export function extractMessageText(
+  message: Pick<ChatMessage, "parts"> | undefined,
+): string {
+  if (!message) {
+    return "";
+  }
+
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Builds a clean deterministic fallback title (~50 chars max) from the first
+ * user message so new chats always have a readable title even if LLM title
+ * summarization is skipped or hits a rate limit.
+ */
+export function extractFallbackChatTitle(
+  message: Pick<ChatMessage, "parts">,
+): string {
+  const rawText = extractMessageText(message);
+
+  if (!rawText) {
+    return "Photo / Recipe Upload";
+  }
+
+  const withoutUrls = rawText
+    .replace(/https?:\/\/\S+/gi, formatUrlForTitle)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const withoutFiller = withoutUrls.replace(FILLER_PREFIX_REGEX, "").trim();
+  const baseTitle = withoutFiller || withoutUrls;
+  const capitalized = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
+
+  if (capitalized.length <= MAX_FALLBACK_TITLE_LENGTH) {
+    return capitalized;
+  }
+
+  const slice = capitalized.slice(0, MAX_FALLBACK_TITLE_LENGTH - 3);
+  const lastSpace = slice.lastIndexOf(" ");
+  const cut = lastSpace > 20 ? slice.slice(0, lastSpace) : slice;
+  return `${cut.replace(/[,\s.;:!?-]+$/g, "")}...`;
 }

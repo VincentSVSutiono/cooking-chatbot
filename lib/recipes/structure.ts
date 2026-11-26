@@ -23,6 +23,12 @@ export type GetRecipeOutput =
       id: string;
       title?: string;
       message: string;
+    }
+  | {
+      status: "fetch-error";
+      id: string;
+      title?: string;
+      message: string;
     };
 
 export type ImportUrlRecipeOutput =
@@ -87,9 +93,9 @@ ${normalizedRecipe.instructions}`;
       times: output.times,
       safetyNote: output.safetyNote,
       source: {
-        name: "TheMealDB",
+        name: normalizedRecipe.sourceName || "TheMealDB",
         url: normalizedRecipe.sourceUrl,
-        creditText: THEMEALDB_CREDIT_TEXT,
+        creditText: normalizedRecipe.creditText || THEMEALDB_CREDIT_TEXT,
         thumbnailUrl: normalizedRecipe.thumbnailUrl,
         youtubeUrl: normalizedRecipe.youtubeUrl,
         category: normalizedRecipe.category,

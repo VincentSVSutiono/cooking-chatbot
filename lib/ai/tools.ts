@@ -6,7 +6,7 @@ import {
   type ToolUIPart,
 } from "ai";
 import z from "zod";
-import { getMealDbRecipeById, searchMealDbRecipes } from "@/lib/recipes/mealdb";
+import { getRecipeByIdFromDb, searchRecipesInDb } from "@/lib/db/recipes";
 import {
   assertSafeRecipeUrl,
   fetchSafeUrlHtml,
@@ -15,7 +15,6 @@ import {
   formatFetchErrorMessage,
 } from "@/lib/recipes/url-import";
 import {
-  structureMealDbRecipe,
   structureUrlRecipe,
   type GetRecipeOutput,
   type ImportUrlRecipeOutput,
@@ -25,16 +24,17 @@ import { extractWebPage, searchWebPage } from "@/lib/ai/tavily";
 export function createCookingTools(modelId?: string) {
   const searchRecipes = tool({
     description:
-      "Search TheMealDB for real, verified meal recipes by dish name or main ingredient keyword. " +
+      "Search our recipe database (TheMealDB and saved recipes) using semantic vector search. " +
+      "Works for dish names (e.g., 'carbonara'), ingredients on hand (e.g., 'chicken, garlic, ginger, soy sauce'), " +
+      "or meal vibes and descriptions (e.g., 'something warm and comforting with chicken'). " +
       "Returns candidate recipe matches so the user can preview options and choose one. " +
-      "Use this whenever the user asks to cook or search for a dish (e.g., 'how to make carbonara', 'chicken curry recipe'). " +
       "Do NOT call this tool for general cooking definitions or technique questions (e.g., 'what does simmer mean?').",
     inputSchema: z.object({
       query: z
         .string()
         .min(1)
         .describe(
-          "The name of the dish or meal keyword to search for, e.g. 'carbonara', 'beef stew', or 'pancakes'",
+          "A dish name, comma-separated ingredients on hand, or meal description/vibe to search for, e.g. 'carbonara', 'chicken, garlic, ginger, soy sauce', or 'warm comforting chicken soup'",
         ),
       offset: z
         .number()
@@ -42,15 +42,15 @@ export function createCookingTools(modelId?: string) {
         .min(0)
         .optional()
         .describe(
-          "Number of recipes to skip for pagination (e.g. 3 to see the next batch of recipes)",
+          "Number of recipes to skip for pagination (3 results per page). Start at 0, then increment by 3 each time the user asks for more options (e.g., 3, then 6, then 9).",
         ),
     }),
-    execute: ({ query, offset }) => searchMealDbRecipes(query, offset),
+    execute: ({ query, offset }) => searchRecipesInDb(query, offset),
   });
 
   const getRecipe = tool({
     description:
-      "Look up a specific meal by its TheMealDB recipe id, structure its instructions into beginner-friendly steps, and display its full Recipe Card. " +
+      "Look up a specific recipe by its database recipe id, load or structure its instructions into beginner-friendly steps, and display its full Recipe Card. " +
       "Call this tool ONLY when the user clicks 'View full recipe' or explicitly asks to open/view the full recipe card for a specific match.",
     inputSchema: z.object({
       id: z
@@ -58,7 +58,7 @@ export function createCookingTools(modelId?: string) {
         .trim()
         .min(1)
         .describe(
-          "The TheMealDB recipe ID to look up, e.g. '52982' or '52772'",
+          "The recipe ID from searchRecipes results, e.g. '52772' or 'web-a1b2c3d4e5f6'",
         ),
       title: z
         .string()
@@ -70,17 +70,11 @@ export function createCookingTools(modelId?: string) {
         ),
     }),
     execute: async ({ id, title }): Promise<GetRecipeOutput> => {
-      const normalizedRecipe = await getMealDbRecipeById(id);
-      if (!normalizedRecipe) {
-        return {
-          status: "not-found",
-          id,
-          title,
-          message: `Could not find recipe #${id} in TheMealDB.`,
-        };
+      const result = await getRecipeByIdFromDb(id, modelId);
+      if (result.status !== "success" && !result.title && title) {
+        return { ...result, title };
       }
-
-      return structureMealDbRecipe(normalizedRecipe, modelId);
+      return result;
     },
   });
 
@@ -136,7 +130,7 @@ export function createCookingTools(modelId?: string) {
 
   const webSearch = tool({
     description:
-      "Search the web for live cooking information, seasonal produce, ingredient substitutions, or recipes not found in TheMealDB. " +
+      "Search the web for live cooking information, seasonal produce, ingredient substitutions, or recipes not found in our recipe database. " +
       "Do NOT call this for dishes already found by searchRecipes or when the user already provided a recipe URL (use importUrlRecipe for URLs).",
     inputSchema: z.object({
       query: z

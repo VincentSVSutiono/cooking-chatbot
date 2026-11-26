@@ -8,6 +8,11 @@ export type DnsLookupFn = (
 const defaultDnsLookup: DnsLookupFn = (hostname) =>
   dnsLookup(hostname, { all: true });
 
+export interface FetchSafeUrlHtmlOptions {
+  lookupFn?: DnsLookupFn;
+  fetchFn?: typeof fetch;
+}
+
 export type ExtractedUrlRecipe =
   | {
       mode: "json-ld";
@@ -34,51 +39,6 @@ export type ExtractedUrlRecipe =
       sourceUrl: string;
     };
 
-export function isPrivateOrReservedIp(rawIp: string): boolean {
-  const cleaned = rawIp
-    .trim()
-    .replace(/^\[|\]$/g, "")
-    .toLowerCase();
-
-  // 1. Unwrap IPv4-mapped IPv6 addresses like "::ffff:127.0.0.1"
-  if (cleaned.startsWith("::ffff:")) {
-    const mappedV4 = cleaned.slice("::ffff:".length);
-    if (isIP(mappedV4) === 4) {
-      return isPrivateOrReservedIp(mappedV4);
-    }
-  }
-
-  const version = isIP(cleaned);
-
-  // 2. IPv4 ranges
-  if (version === 4) {
-    const [a, b] = cleaned.split(".").map(Number);
-
-    if (a === 0) return true; // 0.0.0.0/8 (unspecified)
-    if (a === 10) return true; // 10.0.0.0/8 (private)
-    if (a === 127) return true; // 127.0.0.0/8 (loopback)
-    if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local / cloud metadata)
-    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 (private)
-    if (a === 192 && b === 168) return true; // 192.168.0.0/16 (private)
-    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 (carrier-grade NAT)
-    if (a >= 224) return true; // 224.0.0.0+ (multicast & reserved)
-
-    return false;
-  }
-
-  // 3. IPv6 ranges
-  if (version === 6) {
-    if (cleaned === "::1" || cleaned === "::") return true; // loopback / unspecified
-    if (cleaned.startsWith("fc") || cleaned.startsWith("fd")) return true; // unique local (fc00::/7)
-    if (/^fe[89ab]/.test(cleaned)) return true; // link-local (fe80::/10)
-    if (cleaned.startsWith("ff")) return true; // multicast (ff00::/8)
-
-    return false;
-  }
-
-  return true; // Not a valid IP
-}
-
 export async function assertSafeRecipeUrl(
   rawUrl: string,
   lookupFn: DnsLookupFn = defaultDnsLookup,
@@ -91,7 +51,7 @@ export async function assertSafeRecipeUrl(
     throw new Error("Invalid URL format.");
   }
 
-  //	2. Protocol check (http and https only)
+  // 2. Protocol check (http and https only)
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("Only http and https URLs are allowed.");
   }
@@ -109,7 +69,7 @@ export async function assertSafeRecipeUrl(
     throw new Error("Requests to local or private addresses are refused.");
   }
 
-  //	5. If hostname is already a raw IP literal, check it directly
+  // 5. If hostname is already a raw IP literal, check it directly
   if (isIP(hostname) !== 0) {
     if (isPrivateOrReservedIp(hostname)) {
       throw new Error(
@@ -131,11 +91,6 @@ export async function assertSafeRecipeUrl(
   }
 
   return url;
-}
-
-export interface FetchSafeUrlHtmlOptions {
-  lookupFn?: DnsLookupFn;
-  fetchFn?: typeof fetch;
 }
 
 export async function fetchSafeUrlHtml(
@@ -204,6 +159,90 @@ export async function fetchSafeUrlHtml(
   throw new Error("Too many redirects (max 3).");
 }
 
+export function extractUrlRecipe(
+  html: string,
+  pageUrl: string,
+): ExtractedUrlRecipe {
+  const siteName = getSiteNameFromUrl(pageUrl);
+  const scriptRegex =
+    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
+  let match: RegExpExecArray | null;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    const rawJson = match[1]?.trim();
+    if (!rawJson) continue;
+
+    try {
+      const parsed = JSON.parse(rawJson);
+      const recipeNode = findRecipeNodeInJsonLd(parsed);
+      if (!recipeNode) continue;
+
+      const title =
+        extractFirstString(recipeNode.name) ||
+        extractPageTitle(html) ||
+        "Imported Recipe";
+
+      const rawIngredients = Array.isArray(recipeNode.recipeIngredient)
+        ? recipeNode.recipeIngredient
+        : Array.isArray(recipeNode.ingredients)
+          ? recipeNode.ingredients
+          : [];
+
+      const ingredients = rawIngredients
+        .filter(
+          (item): item is string =>
+            typeof item === "string" && item.trim().length > 0,
+        )
+        .map((item) => decodeHtmlEntities(item.trim()));
+
+      const instructions = extractInstructionsText(
+        recipeNode.recipeInstructions,
+      );
+
+      if (ingredients.length > 0 && instructions.length > 0) {
+        return {
+          mode: "json-ld",
+          title,
+          ingredients,
+          instructions,
+          notesText: extractRecipeNotesFromHtml(html),
+          prepTime: formatIsoDuration(recipeNode.prepTime),
+          cookTime: formatIsoDuration(recipeNode.cookTime),
+          totalTime: formatIsoDuration(recipeNode.totalTime),
+          thumbnailUrl: extractImageUrl(recipeNode.image, pageUrl),
+          youtubeUrl:
+            extractYouTubeFromJsonLd(recipeNode.video, pageUrl) ??
+            extractYouTubeUrlFromHtml(html, pageUrl),
+          category: extractFirstString(recipeNode.recipeCategory),
+          area: extractFirstString(recipeNode.recipeCuisine),
+          siteName,
+          sourceUrl: pageUrl,
+        };
+      }
+    } catch {
+      // Ignore malformed JSON-LD blocks and continue checking others
+    }
+  }
+
+  // Fallback: strip non-content blocks and HTML tags to produce clean page text
+  const title = extractPageTitle(html) || "Imported Web Page";
+  const cleanedText = decodeHtmlEntities(
+    stripNonContentBlocks(html)
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ).slice(0, 15000);
+
+  return {
+    mode: "page-text",
+    title,
+    textSnippet: cleanedText,
+    youtubeUrl: extractYouTubeUrlFromHtml(html, pageUrl),
+    siteName,
+    sourceUrl: pageUrl,
+  };
+}
+
 export function isTransientFetchFailure(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   if (error.name === "TimeoutError" || error.name === "AbortError") return true;
@@ -235,6 +274,55 @@ export function formatFetchErrorMessage(error: unknown, rawUrl: string): string 
   }
 
   return error instanceof Error ? error.message : "Could not fetch that URL.";
+}
+
+// ============================================================================
+// SSRF & HTML/JSON-LD Extraction Helpers
+// ============================================================================
+
+export function isPrivateOrReservedIp(rawIp: string): boolean {
+  const cleaned = rawIp
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase();
+
+  // 1. Unwrap IPv4-mapped IPv6 addresses like "::ffff:127.0.0.1"
+  if (cleaned.startsWith("::ffff:")) {
+    const mappedV4 = cleaned.slice("::ffff:".length);
+    if (isIP(mappedV4) === 4) {
+      return isPrivateOrReservedIp(mappedV4);
+    }
+  }
+
+  const version = isIP(cleaned);
+
+  // 2. IPv4 ranges
+  if (version === 4) {
+    const [a, b] = cleaned.split(".").map(Number);
+
+    if (a === 0) return true; // 0.0.0.0/8 (unspecified)
+    if (a === 10) return true; // 10.0.0.0/8 (private)
+    if (a === 127) return true; // 127.0.0.0/8 (loopback)
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local / cloud metadata)
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 (private)
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16 (private)
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 (carrier-grade NAT)
+    if (a >= 224) return true; // 224.0.0.0+ (multicast & reserved)
+
+    return false;
+  }
+
+  // 3. IPv6 ranges
+  if (version === 6) {
+    if (cleaned === "::1" || cleaned === "::") return true; // loopback / unspecified
+    if (cleaned.startsWith("fc") || cleaned.startsWith("fd")) return true; // unique local (fc00::/7)
+    if (/^fe[89ab]/.test(cleaned)) return true; // link-local (fe80::/10)
+    if (cleaned.startsWith("ff")) return true; // multicast (ff00::/8)
+
+    return false;
+  }
+
+  return true; // Not a valid IP
 }
 
 function formatIsoDuration(iso: unknown): string | null {
@@ -576,88 +664,4 @@ export function extractRecipeNotesFromHtml(html: string): string | null {
   }
 
   return null;
-}
-
-export function extractUrlRecipe(
-  html: string,
-  pageUrl: string,
-): ExtractedUrlRecipe {
-  const siteName = getSiteNameFromUrl(pageUrl);
-  const scriptRegex =
-    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-
-  let match: RegExpExecArray | null;
-  while ((match = scriptRegex.exec(html)) !== null) {
-    const rawJson = match[1]?.trim();
-    if (!rawJson) continue;
-
-    try {
-      const parsed = JSON.parse(rawJson);
-      const recipeNode = findRecipeNodeInJsonLd(parsed);
-      if (!recipeNode) continue;
-
-      const title =
-        extractFirstString(recipeNode.name) ||
-        extractPageTitle(html) ||
-        "Imported Recipe";
-
-      const rawIngredients = Array.isArray(recipeNode.recipeIngredient)
-        ? recipeNode.recipeIngredient
-        : Array.isArray(recipeNode.ingredients)
-          ? recipeNode.ingredients
-          : [];
-
-      const ingredients = rawIngredients
-        .filter(
-          (item): item is string =>
-            typeof item === "string" && item.trim().length > 0,
-        )
-        .map((item) => decodeHtmlEntities(item.trim()));
-
-      const instructions = extractInstructionsText(
-        recipeNode.recipeInstructions,
-      );
-
-      if (ingredients.length > 0 && instructions.length > 0) {
-        return {
-          mode: "json-ld",
-          title,
-          ingredients,
-          instructions,
-          notesText: extractRecipeNotesFromHtml(html),
-          prepTime: formatIsoDuration(recipeNode.prepTime),
-          cookTime: formatIsoDuration(recipeNode.cookTime),
-          totalTime: formatIsoDuration(recipeNode.totalTime),
-          thumbnailUrl: extractImageUrl(recipeNode.image, pageUrl),
-          youtubeUrl:
-            extractYouTubeFromJsonLd(recipeNode.video, pageUrl) ??
-            extractYouTubeUrlFromHtml(html, pageUrl),
-          category: extractFirstString(recipeNode.recipeCategory),
-          area: extractFirstString(recipeNode.recipeCuisine),
-          siteName,
-          sourceUrl: pageUrl,
-        };
-      }
-    } catch {
-      // Ignore malformed JSON-LD blocks and continue checking others
-    }
-  }
-
-  // Fallback: strip non-content blocks and HTML tags to produce clean page text
-  const title = extractPageTitle(html) || "Imported Web Page";
-  const cleanedText = decodeHtmlEntities(
-    stripNonContentBlocks(html)
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim(),
-  ).slice(0, 15000);
-
-  return {
-    mode: "page-text",
-    title,
-    textSnippet: cleanedText,
-    youtubeUrl: extractYouTubeUrlFromHtml(html, pageUrl),
-    siteName,
-    sourceUrl: pageUrl,
-  };
 }
