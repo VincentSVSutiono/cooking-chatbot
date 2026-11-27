@@ -107,6 +107,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - [x] Test search grounding compatibility on chosen Gemini models (verified `googleSearch` has 0 free-tier quota on Google AI Studio -> HTTP 429; replaced with Tavily `webSearch` at 1,000 free credits/month) _(step 4)_
 - [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed _(step 1)_
 - [x] Pick the embedding model (`gemini-embedding-2`, 768 MRL dims, L2-normalized, Google AI Studio free tier) _(step 5b)_
+- [ ] Sub-recipe sections for multi-part web recipes (`section` or `dishPart`, avoid vague `group` or React-colliding `component`): generic & optional across all sites (single-part and TheMealDB recipes stay flat/unchanged); preserve Schema.org `HowToSection.name` in `extractInstructionsText` (`lib/recipes/url-import.ts` currently drops `obj.name` when `obj.itemListElement` exists) and extract HTML ingredient section headings alongside flat JSON-LD `recipeIngredient` _(step 6)_
 - [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
 - [x] Link import: site terms (consciously accepted for personal use: respect `402`/`403`, keep visible attribution, no crawling/redistribution) _(step 4)_
 - [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication _(step 7)_
