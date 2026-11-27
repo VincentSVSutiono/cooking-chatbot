@@ -64,7 +64,7 @@ alter table public.recipes enable row level security;
 create or replace function public.match_recipes(
   query_embedding vector(768),
   query_text text default '',
-  match_threshold double precision default 0.35,
+  match_threshold double precision default 0.5,
   match_count int default 3,
   match_offset int default 0
 )

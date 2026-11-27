@@ -19,7 +19,7 @@ import {
 } from "@/lib/recipes/structure";
 import { getSupabaseAdminClient } from "./client";
 
-const DEFAULT_MATCH_THRESHOLD = 0.35;
+const DEFAULT_MATCH_THRESHOLD = 0.5;
 const DEFAULT_PAGE_LIMIT = 3;
 
 const RECIPE_PREVIEW_COLUMNS =

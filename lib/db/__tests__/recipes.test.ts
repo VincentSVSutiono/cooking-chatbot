@@ -155,7 +155,7 @@ describe("searchRecipesInDb", () => {
     expect(spies.rpc).toHaveBeenCalledWith("match_recipes", {
       query_embedding: SAMPLE_VECTOR,
       query_text: "creamy garlic pasta",
-      match_threshold: 0.35,
+      match_threshold: 0.5,
       match_count: 3,
       match_offset: 3,
     });

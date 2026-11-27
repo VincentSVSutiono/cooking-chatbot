@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:seed": "node --env-file=.env --import ./scripts/register-node.mjs scripts/seed-mealdb.ts",
+    "db:compare": "node --env-file=.env --import ./scripts/register-node.mjs scripts/compare-search.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.108",
