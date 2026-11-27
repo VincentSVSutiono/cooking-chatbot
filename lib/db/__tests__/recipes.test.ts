@@ -1,8 +1,30 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-vi.mock("server-only", () => ({}));
+const { saveWebRecipeToDbMock } = vi.hoisted(() => ({
+  saveWebRecipeToDbMock: {
+    impl: null as ((recipe: StructuredRecipe) => Promise<{ id: string }>) | null,
+  },
+}));
 
+vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+vi.mock("@/lib/db/recipes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/recipes")>();
+  return {
+    ...actual,
+    saveWebRecipeToDb: (
+      ...args: Parameters<typeof actual.saveWebRecipeToDb>
+    ) =>
+      saveWebRecipeToDbMock.impl
+        ? saveWebRecipeToDbMock.impl(args[0])
+        : actual.saveWebRecipeToDb(...args),
+  };
+});
+
+import { saveWebRecipeAction } from "@/lib/db/actions";
 import {
   buildWebRecipeId,
   getRecipeByIdFromDb,
@@ -354,5 +376,66 @@ describe("saveWebRecipeToDb", () => {
       }),
       { onConflict: "id" },
     );
+  });
+});
+
+describe("saveWebRecipeAction", () => {
+  afterEach(() => {
+    saveWebRecipeToDbMock.impl = null;
+  });
+
+  it("rejects invalid recipe input at the boundary without calling saveWebRecipeToDb", async () => {
+    const mockSave = vi.fn();
+    saveWebRecipeToDbMock.impl = mockSave;
+
+    const nullResult = await saveWebRecipeAction(null);
+    const badResult = await saveWebRecipeAction({ title: "Incomplete" });
+
+    expect(nullResult).toEqual({
+      status: "error",
+      message: "Invalid recipe data. Could not save recipe.",
+    });
+    expect(badResult).toEqual({
+      status: "error",
+      message: "Invalid recipe data. Could not save recipe.",
+    });
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it("validates a web recipe and returns its saved deterministic ID", async () => {
+    const mockSave = vi.fn().mockResolvedValue({ id: "web-abc123def456" });
+    saveWebRecipeToDbMock.impl = mockSave;
+
+    const webRecipe: StructuredRecipe = {
+      ...SAMPLE_STRUCTURED_RECIPE,
+      id: "url-https%3A%2F%2Fwww.recipetineats.com%2Fpasta-carbonara",
+      source: {
+        ...SAMPLE_STRUCTURED_RECIPE.source,
+        name: "recipetineats.com",
+        url: "https://www.recipetineats.com/pasta-carbonara/",
+        creditText:
+          "Recipe imported from recipetineats.com (https://www.recipetineats.com/pasta-carbonara/)",
+      },
+    };
+
+    const result = await saveWebRecipeAction(webRecipe);
+
+    expect(result).toEqual({ status: "success", id: "web-abc123def456" });
+    expect(mockSave).toHaveBeenCalledWith(webRecipe);
+  });
+
+  it("returns a friendly error when embedding or database persistence fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    saveWebRecipeToDbMock.impl = vi
+      .fn()
+      .mockRejectedValue(new Error("429 RESOURCE_EXHAUSTED"));
+
+    const result = await saveWebRecipeAction(SAMPLE_STRUCTURED_RECIPE);
+
+    expect(result).toEqual({
+      status: "error",
+      message: "Could not save recipe. Please try again.",
+    });
+    errorSpy.mockRestore();
   });
 });

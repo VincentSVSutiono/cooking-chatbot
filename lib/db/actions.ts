@@ -1,15 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { validateRecipe } from "@/lib/recipes/schema";
 import {
   deleteChatById,
   isValidUuid,
   listChats,
   type ChatSummary,
 } from "./chats";
+import { saveWebRecipeToDb } from "./recipes";
 
 export type DeleteChatResult =
   | { status: "success" }
+  | { status: "error"; message: string };
+
+export type SaveWebRecipeResult =
+  | { status: "success"; id: string }
   | { status: "error"; message: string };
 
 /**
@@ -45,6 +51,33 @@ export async function deleteChatAction(
     return {
       status: "error",
       message: "Could not delete chat. Please try again.",
+    };
+  }
+}
+
+/**
+ * Validates a web-imported recipe at the Server Action boundary, generates its
+ * document embedding, and upserts it into `public.recipes`.
+ */
+export async function saveWebRecipeAction(
+  recipeInput: unknown,
+): Promise<SaveWebRecipeResult> {
+  const validation = validateRecipe(recipeInput);
+  if (!validation.success) {
+    return {
+      status: "error",
+      message: "Invalid recipe data. Could not save recipe.",
+    };
+  }
+
+  try {
+    const { id } = await saveWebRecipeToDb(validation.data);
+    return { status: "success", id };
+  } catch (error) {
+    console.error("Failed to save web recipe:", error);
+    return {
+      status: "error",
+      message: "Could not save recipe. Please try again.",
     };
   }
 }

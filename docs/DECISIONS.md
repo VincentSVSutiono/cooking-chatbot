@@ -32,7 +32,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 
 - **Design:** shared model IDs live in `config/models.ts` (client-safe) and provider instantiation lives in `config/ai.ts` (`server-only`). Nothing provider-specific anywhere else, so swapping is a config change.
 - **Chat model:** Google Gemini (`@ai-sdk/google` via Google AI Studio free tier), selectable in UI between `gemini-3.6-flash`, `gemini-3.5-flash-lite` (default), and `gemini-3.1-flash-lite` (`gemini-3.8-flash` dropped in step 2 due to silent stream failures). **[verified, step 2]**
-- **Embedding model:** a separate model, decided in step 5b. Zen lists none, so it will come from another provider. Free options **[unverified]**. Changing it later means re-embedding every recipe, because vectors from different models can't be compared.
+- **Embedding model:** Google Gemini `gemini-embedding-2` (`@ai-sdk/google`, configured in `config/ai.ts` via `EMBEDDING_MODEL_ID` and `EMBEDDING_DIMENSIONS = 768`), truncated via MRL to `768` dims and L2-normalized (`RETRIEVAL_DOCUMENT` for stored recipes, `RETRIEVAL_QUERY` for searches). Free tier: 100 RPM, 30,000 TPM, 1,000 RPD. **[verified, step 5b]** Changing it later means re-embedding every recipe, because vectors from different models can't be compared.
 
 ### Swap checklist (use for any provider)
 
@@ -106,7 +106,7 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 - [x] Test tool calling compatibility on chosen Gemini models (reliable tool calling & strict grounding) _(step 2)_
 - [x] Test search grounding compatibility on chosen Gemini models (verified `googleSearch` has 0 free-tier quota on Google AI Studio -> HTTP 429; replaced with Tavily `webSearch` at 1,000 free credits/month) _(step 4)_
 - [ ] Zen: does Muse Spark 1.3 free work via API key, what are its rate limits, is app use allowed _(step 1)_
-- [ ] Pick the embedding model _(step 5b)_
+- [x] Pick the embedding model (`gemini-embedding-2`, 768 MRL dims, L2-normalized, Google AI Studio free tier) _(step 5b)_
 - [ ] Safety table values: take from an official food-safety source and cite it here _(step 6)_
 - [x] Link import: site terms (consciously accepted for personal use: respect `402`/`403`, keep visible attribution, no crawling/redistribution) _(step 4)_
 - [ ] Vercel function duration on Hobby, Vercel Authentication on Hobby, cron vs Vercel Authentication _(step 7)_
@@ -121,6 +121,19 @@ _Reference doc: the technical facts and constraints behind our choices. Read it 
 ## 7. Decision log
 
 _(Newest first. Format: `YYYY-MM-DD: decision, reason, source.`)_
+
+- 2026-11-27: Chose Google Gemini `gemini-embedding-2` truncated to 768 MRL dimensions (L2-normalized, `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`) in `config/ai.ts` and `lib/ai/embeddings.ts`. Reason: saves 75% storage on Supabase's 500 MB free tier and fits pgvector's 2,000-dim HNSW index limit while sharing the existing Google AI Studio key (100 RPM / 30k TPM / 1k RPD free tier). Source: `config/ai.ts`, `lib/ai/embeddings.ts`, live smoke check.
+- 2026-11-27: Stored all 790 TheMealDB recipes and user-saved web recipes in unified `public.recipes` (`vector(768)` HNSW cosine index, `match_recipes` RPC with `0.50` threshold + exact-title boost, lazy self-healing `structured_recipe` JSONB cache, and `saveWebRecipeAction` with deterministic URL-hash IDs). Reason: zero live TheMealDB calls in the app, 0 LLM calls during seeding or cached reads, and non-destructive `npm run db:seed` rebuilds that leave `source_type = 'web'` rows untouched. Source: `supabase/schema.sql`, `lib/db/recipes.ts`, `lib/db/actions.ts`, `scripts/seed-mealdb.ts`.
+- 2026-11-27: Benchmarked keyword search (`searchRecipesByKeywordInDb`) vs. pgvector search (`searchRecipesInDb`, `match_threshold = 0.50`) across 6 queries on all 790 seeded MealDB recipes via `npm run db:compare`. Reason: verify semantic search handles dish names, meal vibes, multi-ingredient lists, and US/UK vocabulary where keyword `ILIKE` returns 0 matches. Source: `scripts/compare-search.ts`.
+
+  | Category | Query | Keyword Search (top 3) | Vector Search (top 3, cosine) |
+  | --- | --- | --- | --- |
+  | Exact dish name | `spaghetti carbonara` | 0 matches | 790 total: Spaghetti alla Carbonara (0.80); Spaghetti with Spanish flavours (0.71); Spaghetti Bolognese (0.70) |
+  | Vibe / mood | `something warm and comforting with chicken` | 0 matches | 790 total: Belgian Waterzooi Chicken (0.70); Spanish chicken pie (0.70); Chicken and Potato Roti (0.69) |
+  | Multi-ingredient list | `chicken, garlic, ginger, soy sauce` | 0 matches | 765 total: Chicken Karaage (0.72); Teriyaki Chicken Casserole (0.70); Kung Pao Chicken (0.70) |
+  | Texture + dietary + ingredients | `crispy vegetarian dinner with potatoes and spices` | 0 matches | 9 total: Kafteji (0.53); Air fryer patatas bravas (0.53); Chtitha Batata (Algerian Potato Stew) (0.52) |
+  | US-to-UK culinary vocabulary | `eggplant parmesan` | 0 matches | 790 total: Crispy Eggplant (0.72); Eggplant Adobo (0.71); Tortang Talong (0.70) |
+  | Flavor / dessert description | `sweet chocolate dessert with strawberries` | 0 matches | 194 total: Strawberry tart (0.66); Strawberries Romanoff (0.62); Chocolate Raspberry Brownies (0.62) |
 
 - 2026-11-25: Step 5a uses a server-only `@supabase/supabase-js` admin client (`SUPABASE_SECRET_KEY`, no `NEXT_PUBLIC_` exposure) with `chats`/`messages` storing AI SDK `ChatMessage["parts"]` as `jsonb`, plus Server Actions (`deleteChatAction`, `listChatsAction`). Reason: keeps database credentials off the client and restores full tool states, `<RecipeCard />`, and attachments across refreshes. Source: `lib/db/client.ts`, `lib/db/chats.ts`, `lib/db/actions.ts`.
 - 2026-11-25: Step 5a starts `gemini-3.1-flash-lite` title generation in parallel before `streamText` (`1500ms` post-stream cap in `startSaveChat`, finalized via `next/server` `after()`) with deterministic fallback titles, and updates the sidebar via `freshChats` (`listChatsAction`) on stream finish instead of `router.refresh()`. Reason: keeps first-turn Stop response fast and prevents `app/chat/[id]/loading.tsx` flashes during live chats. Source: `lib/db/save-chat.ts`, `lib/ai/title.ts`, `components/chat/ChatShell.tsx`, `components/chat/ChatSidebar.tsx`.

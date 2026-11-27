@@ -139,11 +139,17 @@ function FileAttachmentView({ part }: { part: FileUIPart }) {
 
 function RecipeCardToolView({ part }: { part: RecipeCardToolPart }) {
   const output = part.state === "output-available" ? part.output : undefined;
+  const canSaveToRecipes = part.type === "tool-importUrlRecipe";
 
   return (
     <div>
       <ToolStatusPill part={part} />
-      {output?.status === "success" && <RecipeCard recipe={output.recipe} />}
+      {output?.status === "success" && (
+        <RecipeCard
+          recipe={output.recipe}
+          canSaveToRecipes={canSaveToRecipes}
+        />
+      )}
       {output && output.status !== "success" && (
         <RecipeCardError title={output.title} message={output.message} />
       )}

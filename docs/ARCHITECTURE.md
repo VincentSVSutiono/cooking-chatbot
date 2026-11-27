@@ -14,18 +14,20 @@ Keep files grouped by **domain/feature**, not by generic technical bucket (avoid
 
 ### `config/` — App-wide configuration (split by client/server boundary)
 - `config/models.ts` — **client-safe** model IDs (`AVAILABLE_MODELS`, `DEFAULT_MODEL_ID`, `ModelId`). Safe to import in `"use client"` components.
-- `config/ai.ts` — **`"server-only"`** provider wiring (`getChatModel`) and `COOKING_SYSTEM_PROMPT`. Never hard-code provider SDKs or model IDs anywhere else.
+- `config/ai.ts` — **`"server-only"`** provider wiring (`getChatModel`, `getEmbeddingModel`, `EMBEDDING_MODEL_ID`, `EMBEDDING_DIMENSIONS`) and `COOKING_SYSTEM_PROMPT`. Never hard-code provider SDKs or model IDs anywhere else.
 
 ### `lib/` — Domain logic & external integrations
 - `lib/ai/`
   - `tools.ts` — thin glue defining AI SDK tools (`createCookingTools`) and deriving all UI tool/message types via `InferUITools` (`CookingTools`, `ChatMessage`, `CookingToolPart`, `RecipeCardToolPart`). **Do not create manual duplicate part-type files** (replaces deleted `lib/ai/types.ts`).
+  - `embeddings.ts` — `gemini-embedding-2` 768-dim MRL embedding helpers (`formatRecipeForEmbedding`, `normalizeVector`, `embedRecipeDocument`, `embedRecipeDocumentsBatch`, `embedSearchQuery`).
   - `tavily.ts` — external Tavily API client (`/search`, `/extract`), named after the service it wraps.
   - `title.ts` — `gemini-3.1-flash-lite` 3–5 word chat title summarizer (`generateChatTitleSummary`).
-- `lib/db/` — Supabase persistence, chat-turn coordination, and Server Actions:
+- `lib/db/` — Supabase persistence, chat-turn coordination, recipe repository, and Server Actions:
   - `client.ts` — singleton server-only Supabase admin client (`getSupabaseAdminClient`).
   - `chats.ts` — Postgres `chats`/`messages` CRUD, UUID validation, message mapping, and fallback title generation.
+  - `recipes.ts` — `public.recipes` repository (`searchRecipesInDb` via `match_recipes` RPC, lazy self-healing `getRecipeByIdFromDb`, `saveWebRecipeToDb`, `buildWebRecipeId`, and CLI seed/benchmark helpers).
   - `save-chat.ts` — per-turn `startSaveChat` orchestrator (pre-stream save + background title with 1.5s stream-end cap).
-  - `actions.ts` — `"use server"` Server Actions (`deleteChatAction`, `listChatsAction`).
+  - `actions.ts` — `"use server"` Server Actions (`deleteChatAction`, `listChatsAction`, `saveWebRecipeAction`).
 - `lib/recipes/` — recipe pipeline split by stage:
   - `schema.ts` — Zod schemas & validation (`StructuredRecipe`, `validateRecipe`).
   - `mealdb.ts` — external TheMealDB API client & normalizer (`NormalizedMealDbRecipe`).
@@ -38,7 +40,12 @@ Keep files grouped by **domain/feature**, not by generic technical bucket (avoid
 
 ### `components/` — React UI grouped by what it renders
 - `components/chat/` — conversation shell & chat primitives (`ChatShell`, `ChatSidebarServer`, `ChatSidebar`, `ChatInterface`, `ChatHeader`, `ChatWelcomeScreen`, `ChatInputBar`, `ChatMessageItem`, `ToolStatusPill`).
-- `components/recipes/` — **all** `Recipe*` components (`RecipeCard`, `RecipeMatchList`, `RecipeAttribution`, `RecipeImageModal`, `RecipeStepsCollapsible`, `RecipeNotesCollapsible`, `RecipeExpandButton`, `RecipeFormattedText`). Group by what the component displays, not where it was first imported.
+- `components/recipes/` — **all** `Recipe*` components (`RecipeCard`, `RecipeSaveButton`, `RecipeMatchList`, `RecipeAttribution`, `RecipeImageModal`, `RecipeStepsCollapsible`, `RecipeNotesCollapsible`, `RecipeExpandButton`, `RecipeFormattedText`). Group by what the component displays, not where it was first imported.
+
+### `scripts/` — CLI database & benchmark scripts
+- `register-node.mjs` — Node 22 `registerHooks` loader stubbing `"server-only"` and resolving `@/*` aliases for CLI scripts.
+- `seed-mealdb.ts` (`npm run db:seed`) — resumable, TPM-paced TheMealDB importer that preserves `source_type = 'web'` rows.
+- `compare-search.ts` (`npm run db:compare`) — 6-query keyword vs. pgvector search benchmark.
 
 ### `hooks/` — Generic `"use client"` browser/DOM hooks
 - Reusable DOM-only hooks with no app/AI/DB coupling: `useAutogrowTextarea.ts`, `useVisualViewport.ts`, `useDialogFocusTrap.ts`. Keep feature-specific hooks local to their owning component.

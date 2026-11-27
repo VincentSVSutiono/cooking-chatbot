@@ -11,10 +11,12 @@ import { THEMEALDB_URL } from "@/lib/recipes/mealdb";
 import RecipeStepsCollapsible from "./RecipeStepsCollapsible";
 import RecipeNotesCollapsible from "./RecipeNotesCollapsible";
 import RecipeImageModal from "./RecipeImageModal";
+import RecipeSaveButton from "./RecipeSaveButton";
 import { FormattedRecipeIngredient } from "./RecipeFormattedText";
 
 interface RecipeCardProps {
   recipe: StructuredRecipe;
+  canSaveToRecipes?: boolean;
 }
 
 function SectionHeader({
@@ -36,7 +38,10 @@ function SectionHeader({
   );
 }
 
-export default function RecipeCard({ recipe }: RecipeCardProps) {
+export default function RecipeCard({
+  recipe,
+  canSaveToRecipes = false,
+}: RecipeCardProps) {
   const { title, ingredients, steps, notes, times, safetyNote, source } = recipe;
 
   const timingEntries = [
@@ -211,6 +216,8 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
               <ExternalLink className="h-3 w-3" aria-hidden="true" />
             </a>
           </div>
+
+          {canSaveToRecipes && <RecipeSaveButton recipe={recipe} />}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-text-muted">

@@ -56,12 +56,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 5a: Supabase and saved chats — Done (Supabase Postgres `chats` & `messages` tables in `lib/db/chats.ts`, per-turn `startSaveChat` + background `gemini-3.1-flash-lite` title summary in `lib/db/save-chat.ts` & `lib/ai/title.ts`, `/chat/[id]` route with `loading`/`error`/`not-found`, responsive `ChatShell` + `ChatSidebarServer` + `ChatSidebar` portal delete modal using `useDialogFocusTrap`, and `deleteChatAction`/`listChatsAction` Server Actions in `lib/db/actions.ts`).
 
-### [ ] Step 5b: Recipes in the database and vector search
-- **Build:** an import script that copies TheMealDB recipes (official endpoints) into Supabase, an embedding model (chosen here), embeddings for every recipe, vector search replacing the live TheMealDB calls from step 2, and the option to save a validated web-imported recipe (`importUrlRecipe`) + its embedding into the database.
-- **Skills:** `supabase`, `ai-sdk`.
-- **Read first:** Supabase: vectors and pgvector. AI SDK: embeddings.
-- **Done when:** one command rebuilds the base TheMealDB recipes without wiping saved web recipes. Saving an imported web recipe embeds and stores it so future `searchRecipes` queries find it directly in our database. An ingredient-list query returns sensible recipes without exact matches. At least 5 queries are compared against keyword search, with results written to DECISIONS.md. The dish-name tool now reads from our database. The embedding model is recorded in DECISIONS.md.
-- **You can explain:** what an embedding is. Why vector search finds "something warm with chicken" when keywords don't. Why changing the embedding model means re-embedding every recipe.
+### [x] Step 5b: Recipes in the database and vector search — Done (`gemini-embedding-2` 768-dim MRL embeddings in `config/ai.ts` & `lib/ai/embeddings.ts`, `public.recipes` + HNSW `match_recipes` RPC in `supabase/schema.sql`, lazy self-healing recipe repository in `lib/db/recipes.ts`, resumable `npm run db:seed` & `npm run db:compare` in `scripts/`, and `saveWebRecipeAction` + `<RecipeSaveButton />` on web-imported `<RecipeCard />`).
 
 ### [ ] Step 6: Adaptation, safety table, cook-along
 - **Build:** the model adapts a retrieved recipe to the user's ingredients and labels each change. A fixed safety table in code holds values taken from an official food-safety source (cited in DECISIONS.md). Cook-along mode shows one step at a time.
@@ -79,6 +74,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ## 7. Changes log
 
+- 2026-11-27: Completed Step 5b (`gemini-embedding-2` 768-dim L2-normalized embeddings, Supabase `pgvector` `public.recipes` + HNSW `match_recipes` RPC, self-healing cached `getRecipeByIdFromDb`, resumable non-destructive `npm run db:seed` for 790 TheMealDB recipes, 6-query keyword vs. vector benchmark in `DECISIONS.md`, and `"Save to recipes"` persistence for web-imported recipe cards).
 - 2026-11-25: Completed Step 5a (Supabase Postgres `chats`/`messages` persistence, `/chat/[id]` dynamic route with loading/error/not-found states, parallel LLM title summarization with deterministic fallback, responsive `ChatShell` sidebar with `deleteChatAction` & `listChatsAction`, and portal delete confirmation modal).
 - 2026-11-21: Added saving validated web-imported recipes (`importUrlRecipe`) + embeddings to Supabase in Step 5b so the recipe database grows over time without re-searching the web.
 - 2026-11-15: Completed Step 4 (link import with SSRF guards, recipe notes & YouTube video extraction; switched web search from Google Search Grounding to Tavily due to 0 free-tier quota; client-side image resize and server attachment validation).
