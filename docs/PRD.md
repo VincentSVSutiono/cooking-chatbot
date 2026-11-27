@@ -35,7 +35,7 @@ It is a **personal-only** web app, deployed on Vercel, that works well in a phon
 
 ## 5. User flows
 
-- **By ingredients:** user lists what they have, the app finds similar real recipes, adapts one and labels the changes, and shows a recipe card.
+- **By ingredients:** user lists what they have, the app finds similar real recipes, shows a recipe card, and helps with substitutions in chat (labeling suggestions vs. the source recipe).
 - **By dish name:** "I want to make carbonara" returns a recipe card with its ingredient list.
 - **By link:** user pastes a recipe URL, the app imports it into the same recipe card.
 - **By image or file:** user uploads a photo (e.g. ingredients/fridge or a cookbook page) or recipe file (PDF/text) for the companion to read and use.
@@ -58,12 +58,12 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ### [x] Step 5b: Recipes in the database and vector search — Done (`gemini-embedding-2` 768-dim MRL embeddings in `config/ai.ts` & `lib/ai/embeddings.ts`, `public.recipes` + HNSW `match_recipes` RPC in `supabase/schema.sql`, lazy self-healing recipe repository in `lib/db/recipes.ts`, resumable `npm run db:seed` & `npm run db:compare` in `scripts/`, and `saveWebRecipeAction` + `<RecipeSaveButton />` on web-imported `<RecipeCard />`).
 
-### [ ] Step 6: Adaptation, safety table, cook-along
-- **Build:** optional sub-recipe sections (`section` / `dishPart`, e.g. sauce, topping, dough) for any multi-part recipe across extraction, schema, `<RecipeCard />`, and cook-along (leaving normal single-part recipes unchanged); the model adapts a retrieved recipe to the user's ingredients and labels each change; a fixed safety table in code holds values taken from an official food-safety source (cited in DECISIONS.md); cook-along mode shows one step at a time.
+### [ ] Step 6: Multi-part sections, safety table, cook-along
+- **Build:** optional sub-recipe `section` headings (e.g. sauce, topping, dough) for any multi-part recipe across extraction, schema, `<RecipeCard />`, and cook-along (leaving normal single-part recipes unchanged); a fixed safety table in code holds values taken from an official food-safety source (cited in DECISIONS.md); conversational substitution guidance in chat separates source recipe facts from suggested swaps; cook-along mode shows one step at a time with step-focused chat support.
 - **Skills:** `ai-sdk`, `test-driven-development`, `frontend-ui-engineering`.
 - **Read first:** AI SDK: structured output (revisit). An official food-safety source for the safety table. Next.js: client-side state.
-- **Done when:** multi-part recipes from any site display their ingredient and instruction sections clearly on `<RecipeCard />` and in cook-along while normal single-part recipes stay unchanged. Adapted recipes list changes separately from source content. Any temperature in an answer comes from the table. A poultry recipe with no doneness check is flagged by a code check. Cook-along walks through every step and survives a page refresh. In testing, the bot says "I'm not sure, check this" on at least one risky question.
-- **You can explain:** why safety facts live in code. How the app knows what the model changed vs the source. Where cook-along state lives and why.
+- **Done when:** multi-part recipes from any site display their ingredient and instruction sections clearly on `<RecipeCard />` and in cook-along while normal single-part recipes stay unchanged. Any temperature in an answer comes from the table. A poultry recipe with no doneness check is flagged by a code check. Cook-along walks through every step and survives a page refresh. In testing, the bot says "I'm not sure, check this" on at least one risky question.
+- **You can explain:** why safety facts live in code. Why multi-part sections live in the structured schema instead of flat strings. Where cook-along state lives and why.
 
 ### [ ] Step 7: Polish and deploy
 - **Build:** friendly handling of rate limits (429) and errors, minimal CI (lint, type-check, tests, build), personal-only access (Vercel Authentication or an in-app login, decided here), deploy from `main` on Vercel, a once-daily keep-alive cron that runs a small database query, a `LICENSE` file (MIT for code, with TheMealDB data attribution), and a portfolio-ready `README`.
@@ -74,6 +74,7 @@ Each step ends with a working app. Load the named skills before the relevant wor
 
 ## 7. Changes log
 
+- 2026-11-27: Removed structured recipe-card adaptation from Step 6; `<RecipeCard />` stays faithful to source recipes while ingredient substitutions are handled conversationally in chat (or via `webSearch`). Reason: avoids complex card-mutation UX when normal chat prompts cover swaps cleanly.
 - 2026-11-27: Added optional sub-recipe sections (`section` / `dishPart`, never `group`) for multi-part recipes to Step 6 (single-part recipes remain unchanged). Reason: flattening multi-part recipes from any website makes steps like "Mix all ingredients" misleading for beginners and renders repeated ingredients across parts without context.
 - 2026-11-27: Completed Step 5b (`gemini-embedding-2` 768-dim L2-normalized embeddings, Supabase `pgvector` `public.recipes` + HNSW `match_recipes` RPC, self-healing cached `getRecipeByIdFromDb`, resumable non-destructive `npm run db:seed` for 790 TheMealDB recipes, 6-query keyword vs. vector benchmark in `DECISIONS.md`, and `"Save to recipes"` persistence for web-imported recipe cards).
 - 2026-11-25: Completed Step 5a (Supabase Postgres `chats`/`messages` persistence, `/chat/[id]` dynamic route with loading/error/not-found states, parallel LLM title summarization with deterministic fallback, responsive `ChatShell` sidebar with `deleteChatAction` & `listChatsAction`, and portal delete confirmation modal).
